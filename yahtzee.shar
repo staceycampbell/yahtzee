@@ -1,0 +1,3082 @@
+#!/bin/sh
+# This is a shell archive (produced by shar 3.49)
+# To extract the files from this archive, save it to a file, remove
+# everything above the "!/bin/sh" line above, and type "sh file_name".
+#
+# made 06/18/1993 15:50 UTC by staceyc@bionca
+# Source directory /t/staceyc/src/yzcolor
+#
+# existing files will NOT be overwritten unless -c is specified
+#
+# This shar contains:
+# length  mode       name
+# ------ ---------- ------------------------------------------
+#   1233 -rw-r--r-- README
+#    917 -rw-r--r-- Makefile
+#   1059 -rw-r--r-- yahtzee.6
+#   7774 -rw-r--r-- admin.c
+#   5519 -rw-r--r-- book.c
+#   6486 -rw-r--r-- comp.c
+#   3207 -rw-r--r-- eval.c
+#   3140 -rw-r--r-- help.c
+#  11222 -rw-r--r-- main.c
+#   4477 -rw-r--r-- score.c
+#   5308 -rw-r--r-- scr.c
+#   1525 -rw-r--r-- yz_consts.h
+#   7430 -rw-r--r-- yz_costs.h
+#    514 -rw-r--r-- yz_funcs.h
+#   1454 -rw-r--r-- yz_macros.h
+#    317 -rw-r--r-- yz_types.h
+#   1402 -rw-r--r-- port.h
+#
+# ============= README ==============
+if test -f 'README' -a X"$1" != X"-c"; then
+	echo 'x - skipping README (File already exists)'
+else
+echo 'x - extracting README (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'README' &&
+README for Yahtzee 2.1
+----------------------
+X
+This is a complete reimplementation of the Yahtzee 1.0 that was
+released on comp.sources.games in 1988.  This version has
+slightly smarter heurisitics, runs faster, but most importantly
+now implements the 100 point yahtzee bonus rule.
+X
+The game has been alpha and beta tested, and as a result a
+few minor bugs were fixed and a couple of suggestions implemented;
+thanks especially to Dean Reece, Andrew Sharpe and Ron Record.
+X
+The program was developed under Xenix 2.3 on a '386 box using
+both System 5.3.2 and BSD curses libraries.  It should compile
+and run on almost any System 5 or BSD system with a curses library.
+It has been ported to SunOS 3.5 and an AT&T 3b2 running System 5.3.2.
+X
+Please edit the Makefile to ensure the program is compiled with
+a valid high-score file name.  This can be overridden at runtime
+by setting the YAHTZEE_HS environment variable.
+X
+Yahtzee attempts to determine its environment as it compiles.  If it
+is getting this wrong then edit port.h and force it to recognise
+SYS5_2_CURSES, BSD_CURSES or SYS5_3_CURSES.
+X
+Please send comments or changes to;
+X
+Stacey Campbell 
+X
+uucp:		{uunet,ucscc,decwrl,sun,att,microsoft}!sco!staceyc
+internet:	staceyc@sco.com
+SHAR_EOF
+chmod 0644 README ||
+echo 'restore of README failed'
+Wc_c="`wc -c < 'README'`"
+test 1233 -eq "$Wc_c" ||
+	echo 'README: original size 1233, current size' "$Wc_c"
+fi
+# ============= Makefile ==============
+if test -f 'Makefile' -a X"$1" != X"-c"; then
+	echo 'x - skipping Makefile (File already exists)'
+else
+echo 'x - extracting Makefile (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'Makefile' &&
+#
+# Makefile for Yahtzee 2.1
+#
+X
+# A path for the high score file
+HS_FILE="$(HOME)/lib/yahtzee2.hs"
+X
+# system dependent flags
+X
+# Xenix - some Xenix folks may have to add -lx
+#LDLIBS= -ltinfo -lm
+#LDOPT= -O
+#CCOPT= -O
+#CPFLAGS= -DM_TERMINFO
+X
+# System 5
+LDLIBS= -lcurses -lm
+LDOPT= -O
+CCOPT= -O
+CPFLAGS= -I. -DM_TERMINFO
+CC= gcc
+X
+# BSD, SunOS 3.5
+# LDLIBS= -lcurses -ltermlib -lm
+# LDOPT= -O
+# CCOPT= -O
+X
+SRC= admin.c book.c comp.c eval.c help.c main.c score.c scr.c
+OBJS= help.o main.o scr.o admin.o comp.o eval.o book.o score.o
+INCS= yz_consts.h yz_costs.h yz_funcs.h yz_macros.h yz_types.h port.h
+EXE= yahtzee
+PFLAGS= -DYZ_HS_FILE='$(HS_FILE)' $(CPFLAGS)
+CFLAGS= $(PFLAGS) $(CCOPT)
+X
+all: $(EXE)
+X
+$(EXE): $(OBJS)
+X	$(CC) $(LDOPT) -o $(EXE) $(OBJS) $(LDLIBS)
+X
+comp.o: yz_costs.h
+X
+lint:
+X	lint -u $(PFLAGS) $(SRC) > lint.out
+X
+clean:
+X	rm -f $(OBJS) $(EXE)
+X
+shar:
+X	shar README Makefile $(EXE).6 $(SRC) $(INCS) > $(EXE).shar
+SHAR_EOF
+chmod 0644 Makefile ||
+echo 'restore of Makefile failed'
+Wc_c="`wc -c < 'Makefile'`"
+test 917 -eq "$Wc_c" ||
+	echo 'Makefile: original size 917, current size' "$Wc_c"
+fi
+# ============= yahtzee.6 ==============
+if test -f 'yahtzee.6' -a X"$1" != X"-c"; then
+	echo 'x - skipping yahtzee.6 (File already exists)'
+else
+echo 'x - extracting yahtzee.6 (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'yahtzee.6' &&
+.TH Yahtzee 6l
+.SH NAME
+yahtzee \- the game of Yahtzee
+.SH SYNOPSIS
+.B yahtzee
+.B [\-nshfd]
+.SH DESCRIPTION
+.I Yahtzee
+is a computer simulation of the game of the same name.
+This version of
+.I Yahtzee
+allows up to six players, where
+players can be either users at the same terminal
+or a computer simulation of a player.
+.PP
+Full on\-line help is available at all times by pressing
+the question mark character. If you are unfamiliar with
+the rules a rule book is also available at all times
+by pressing the 'b' key.
+.PP
+Options are:
+.TP
+.B  \-n
+play
+.I Yahtzee
+non-stop, good if all players are computer simulations
+.TP
+.B  \-s
+display the high score file
+.TP
+.B  \-h
+give command line options
+.TP
+.B  \-f
+don't sleep between simulation plays
+.TP
+.B  \-d
+don't use the dim mode of the terminal (System 5)
+.PP
+At the end of each game the high score file is updated if necessary.
+.SH BUGS
+Unknown, but please send bug problems to {uunet,ucscc,decwrl,sun}!sco!staceyc
+or staceyc@sco.com.
+.SH AUTHOR
+Stacey Campbell \- Santa Cruz, California, USA \- November 1989
+SHAR_EOF
+chmod 0644 yahtzee.6 ||
+echo 'restore of yahtzee.6 failed'
+Wc_c="`wc -c < 'yahtzee.6'`"
+test 1059 -eq "$Wc_c" ||
+	echo 'yahtzee.6: original size 1059, current size' "$Wc_c"
+fi
+# ============= admin.c ==============
+if test -f 'admin.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping admin.c (File already exists)'
+else
+echo 'x - extracting admin.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'admin.c' &&
+#include <curses.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_macros.h"
+#include "yz_funcs.h"
+X
+int GetHold();
+void SelectCategory();
+int HumanHold();
+void CalcScore();
+int HumanSelect();
+void Outline();
+int SetDice();
+X
+extern int OptLearn;
+extern int OptCheat;
+extern int OptFast;
+extern int OptUseColor;
+X
+void PlayGame(win, players, dice, player_count)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player_count;
+X
+X	{
+X	int cat;
+X	int player;
+X	int held;
+X
+X	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
+X		for (player = 0; player < player_count; ++player)
+X			{
+X			Outline(win, players, player, player_count);
+X			held = GetHold(win, players, dice, player);
+X			if (held < YZ_DICE && ! OptCheat)
+X				{
+X				ROLL_DICE(dice);
+X				held = GetHold(win, players, dice, player);
+X				if (held < YZ_DICE)
+X					ROLL_DICE(dice);
+X				}
+X			CLEAR_HOLD(dice);
+X			DisplayDice(win, dice);
+X			SelectCategory(win, players, dice, player);
+X			ROLL_DICE(dice);
+X			flushinp();
+X			}
+X	}
+X
+static void Outline(win, players, player, player_count)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+int player;
+int player_count;
+X
+X	{
+X	int last;
+X	char *name;
+X
+X	last = player - 1;
+X	if (last < 0)
+X		last = player_count - 1;
+X	name = players[last].name;
+X	mvwaddstr(win, YZ_TOP - 2, YZ_PLAYER_COLS * last + YZ_PLAYER_PAD -
+X	    strlen(name), name);
+X	name = players[player].name;
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(PAIR5));
+X	else
+X		wstandout(win);
+#else
+X	wstandout(win);
+#endif
+X	mvwaddstr(win, YZ_TOP - 2, YZ_PLAYER_COLS * player + YZ_PLAYER_PAD -
+X	    strlen(name), name);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattroff(win, COLOR_PAIR(PAIR5));
+X	else
+X		wstandend(win);
+#else
+X	wstandend(win);
+#endif
+X	}
+X
+int DetermineWinner(win, players, player_count)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+int player_count;
+X
+X	{
+X	int best_total = 0;
+X	int best_player = 0;
+X	int player;
+X	char *name;
+X	int last;
+X
+X	for (player = 0; player < player_count; ++player)
+X		if (players[player].total > best_total)
+X			{
+X			best_total = players[player].total;
+X			best_player = player;
+X			}
+X	last = player_count - 1;
+X	name = players[last].name;
+X	mvwaddstr(win, YZ_TOP - 2, YZ_PLAYER_COLS * last + YZ_PLAYER_PAD -
+X	    strlen(name), name);
+X	name = players[best_player].name;
+X	wstandout(win);
+#ifdef SYS5_3_CURSES
+X	wattron(win, A_BLINK | COLOR_PAIR(PAIR2));
+#endif
+X	mvwaddstr(win, YZ_TOP - 2, YZ_PLAYER_COLS * best_player +
+X	    YZ_PLAYER_PAD - strlen(name), name);
+X	wstandend(win);
+#ifdef SYS5_3_CURSES
+X	wattroff(win, A_BLINK | COLOR_PAIR(PAIR2));
+#endif
+X	wrefresh(win);
+X
+X	return best_player;
+X	}
+X
+static int GetHold(win, players, dice, player)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	int held;
+X
+X	DisplayDice(win, dice);
+X	if (players[player].computer)
+X		{
+X		held = ComputerHold(players, dice, player);
+X		DisplayDice(win, dice);
+X		}
+X	else
+X		if (! OptCheat)
+X			held = HumanHold(win, players, dice, player);
+X		else
+X			held = SetDice(win, players, dice, player);
+X
+X	wrefresh(win);
+X	if (! OptLearn && players[player].computer && ! OptFast)
+X		(void)sleep((unsigned int)2);
+X
+X	return held;
+X	}
+X
+static int SetDice(old_win, players, dice, player)
+X
+WINDOW *old_win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	WINDOW *win;
+X	int i, bogus;
+X
+X	echo();
+X	do	{
+X		win = GrabWindow(old_win, 3, 30, 12, 20, 0);
+X		mvwaddstr(win, 1, 1, "Five dice: ");
+X		wrefresh(win);
+X		wscanw(win, "%d %d %d %d %d", &dice[0].dice, &dice[1].dice,
+X		    &dice[2].dice, &dice[3].dice, &dice[4].dice);
+X		bogus = 0;
+X		for (i = 0; i < YZ_DICE; ++i)
+X			if (--dice[i].dice < 0 || dice[i].dice >= YZ_DICE_MAX)
+X				{
+X				bogus = 1;
+X				flash();
+X				}
+X		DropWindow(old_win, win);
+X		} while (bogus);
+X	noecho();
+X	for (i = 0; i < YZ_DICE; ++i)
+X		dice[i].hold = 1;
+X
+X	return YZ_DICE;
+X	}
+X
+static int HumanHold(win, players, dice, player)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	int ch;
+X	int die = 0;
+X	int i, held = 0;
+X
+#ifndef SYS5_3_CURSES
+X	wrefresh(win);
+#endif
+X	while ((ch = wgetch(win)) != YZ_CR)
+X		switch (ch)
+X		    {
+X		    case 'h' :
+X			--die;
+X			if (die < 0)
+X				die = YZ_DICE - 1;
+X			DieCentre(win, die);
+X			break;
+X		    case 'l' :
+X			die = (die + 1) % YZ_DICE;
+X			DieCentre(win, die);
+X			break;
+X		    case ' ' :
+X			dice[die].hold = ! dice[die].hold;
+X			DisplayDie(win, dice, die);
+X			die = (die + 1) % YZ_DICE;
+X			DieCentre(win, die);
+X			break;
+X		    case 'r' :
+X			(void)ComputerHold(players, dice, player);
+X			DisplayDice(win, dice);
+X			DieCentre(win, die);
+X			break;
+X		    case 'a' :
+X			for (i = 0; i < YZ_DICE; ++i)
+X				dice[i].hold = 1;
+X			DisplayDice(win, dice);
+X			DieCentre(win, die);
+X			break;
+X		    case 't' :
+X			for (i = 0; i < YZ_DICE; ++i)
+X				dice[i].hold = ! dice[i].hold;
+X			DisplayDice(win, dice);
+X			DieCentre(win, die);
+X			break;
+X		    case 'o' :
+X			DSTRUCT_SORT(dice);
+X			DisplayDice(win, dice);
+X			DisplayDie(win, dice, die);
+X			break;
+X		    default :
+X			if (ch >= '1' && ch < '1' + YZ_DICE)
+X				{
+X				die = ch - '1';
+X				dice[die].hold = ! dice[die].hold;
+X				DisplayDie(win, dice, die);
+X				}
+X			else
+X				ExtraCheck(win, ch, HLP_HOLD);
+X			break;
+X		    }
+X	for (i = 0; i < YZ_DICE; ++i)
+X		if (dice[i].hold)
+X			++held;
+X
+X	return held;
+X	}
+X
+static void SelectCategory(win, players, dice, player)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	int cat;
+X
+X	DisplayDice(win, dice);
+X	if (players[player].computer || (! players[player].computer &&
+X	    OptCheat))
+X		cat = ComputerSelect(win, players, dice, player);
+X	else
+X		cat = HumanSelect(win, players, dice, player);
+X	CalcScore(win, cat, players, dice, player);
+X	}
+X
+static int HumanSelect(win, players, dice, player)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	int ch;
+X	int cat = 0;
+X
+X	while (players[player].used[cat])
+X		cat = (cat + 1) % YZ_CAT_COUNT;
+X	do	{
+X		wmove(win, YZ_TOP - 1 + cat, sizeof(YZ_LG_STRAIGHT));
+#ifndef SYS5_3_CURSES
+X		wrefresh(win);
+#endif
+X		switch (ch = wgetch(win))
+X		    {
+X		    case 'j' :
+X			do	{
+X				cat = (cat + 1) % YZ_CAT_COUNT;
+X				} while (players[player].used[cat]);
+X			break;
+X		    case 'k' :
+X			do	{
+X				if (--cat < 0)
+X					cat = YZ_CAT_COUNT - 1;
+X				} while (players[player].used[cat]);
+X			break;
+X		    case 'r' :
+X			cat = ComputerSelect(win, players, dice, player);
+X			break;
+X		    default :
+X			if (ch != YZ_CR)
+X				ExtraCheck(win, ch, HLP_SELECT);
+X			break;
+X		    }
+X		} while (ch != YZ_CR);
+X
+X	return cat;
+X	}
+X
+static void CalcScore(win, cat, players, dice, player)
+X
+WINDOW *win;
+int cat;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	int yz_bonus = 0;
+X	int bonus63 = 0;
+X	players_t *player_p;
+X	int col;
+X	int display;
+X
+X	player_p = &players[player];
+X	display = player_p->computer && ! OptLearn;
+X	col = YZ_PLAYER_COLS * player + YZ_PLAYER_PAD;
+X	Eval(cat, dice, &player_p->score[cat], &yz_bonus, &bonus63, players,
+X	    player);
+X	player_p->used[cat] = 1;
+X	player_p->total += player_p->score[cat];
+X	if (display)
+X		wstandout(win);
+X	PutNumber(win, cat + YZ_TOP - 1, col, player_p->score[cat]);
+X	if (display)
+X		wstandend(win);
+X	if (cat <= YZ_CAT63)
+X		{
+X		player_p->total63 += player_p->score[cat];
+X		PutNumber(win, YZ_63TOTAL_ROW, col, player_p->total63);
+X		if (bonus63)
+X			{
+X			player_p->bonus63 = bonus63;
+X			player_p->total += bonus63;
+X			PutNumber(win, YZ_63BONUS_ROW, col, bonus63);
+X			}
+X		}
+X	if (yz_bonus)
+X		{
+X		player_p->bonus += yz_bonus;
+X		player_p->total += yz_bonus;
+X		PutNumber(win, YZ_BONUS_ROW, col, player_p->bonus);
+X		}
+X	PutNumber(win, YZ_TOTAL_ROW, col, player_p->total);
+X	if (display)
+X		{
+X		DieCentre(win, 0);
+X		if (! OptFast)
+X			(void)sleep((unsigned int)2);
+X		PutNumber(win, cat + YZ_TOP - 1, col, player_p->score[cat]);
+X		wrefresh(win);
+X		}
+X	else
+X		wrefresh(win);
+X	}
+SHAR_EOF
+chmod 0644 admin.c ||
+echo 'restore of admin.c failed'
+Wc_c="`wc -c < 'admin.c'`"
+test 7774 -eq "$Wc_c" ||
+	echo 'admin.c: original size 7774, current size' "$Wc_c"
+fi
+# ============= book.c ==============
+if test -f 'book.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping book.c (File already exists)'
+else
+echo 'x - extracting book.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'book.c' &&
+#include <curses.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_funcs.h"
+#include "yz_macros.h"
+X
+#define RULE_WIDTH 57
+#define RULE_LENGTH (sizeof(Rules) / sizeof(Rules[0]))
+#define RULE_WINDOW_LENGTH 18
+#define RULE_WINDOW_WIDTH (RULE_WIDTH + 2)
+#define TEXT_LENGTH (RULE_WINDOW_LENGTH - 2)
+#define WINDOW_COUNT ((RULE_LENGTH / TEXT_LENGTH) + 1)
+X
+extern int OptUseColor;
+X
+static char *Rules[] = {
+X	"Rules of Yahtzee",
+X	"",
+X	"Object:",
+X	" The object of Yahtzee is to make the highest",
+X	" score of all players in each game.  This is",
+X	" achieved by rolling dice and placing the",
+X	" dice in the category likely to result in the",
+X	" highest possible score.",
+X	"",
+X	"Rolling the Dice:",
+X	" The dice are rolled three times per turn for",
+X	" each player.  Between rolls the player is able",
+X	" to hold dice so that those dice will not",
+X	" participate in the next roll.",
+X	"",
+X	"Selection of Best Category:",
+X	" When the dice roll has been completed the player",
+X	" must select a category for the final set of",
+X	" dice. The rules regarding scoring for each",
+X	" category are as follows:",
+X	"",
+X	" - one, two, ..., six: dice matching the",
+X	"     number of the category are summed, this",
+X	"     sum is the score (e.g. dice values of",
+X	"     1 4 4 5 6 will score 8 in the 'four'",
+X	"     category; 1 in the 'one' category etc.).",
+X	" - three/four of a kind: if at least three/four",
+X	"     of the dice are of one kind then the score",
+X	"     will be the summation of all dice, otherwise",
+X	"     the score is zero",
+X	" - full house: a full house is scored when there",
+X	"     exists a pair of dice AND a triplet of dice",
+X	"     (e.g. dice values 4 4 4 1 1 represent a full",
+X	"     house; 5 of a kind is also a full house).",
+X	" - small straight: a small straight is scored when",
+X	"     at least four dice have consecutive values",
+X	"     (e.g. 1 2 3 4 2 is a small straight).",
+X	" - large straight: a large straight is scored when",
+X	"     the five dice have consecutive values.",
+X	" - Yahtzee: a Yahtzee is scored when all dice have",
+X	"     the same value",
+X	" - chance: the score for chance is the summation",
+X	"     of all dice, it is impossible to score less",
+X	"     than 5 for chance.",
+X	"",
+X	" If the dice are placed in a category where they do",
+X	" not satisfy the requirements of that category, they",
+X	" will score zero. The player must select a category",
+X	" in every turn.",
+X	"",
+X	"63 Bonus:",
+X	"",
+X	" If the total score in categories one to six is greater",
+X	" than or equal to 63 then a bonus of 35 is awarded.",
+X	"",
+X	"Yahtzee Bonus:",
+X	"",
+X	" If a player scores 50 in the Yahtzee category, then all",
+X	" subsequent Yahtzees will result in a bonus of 100.",
+X	" Bonus Yahtzees will score 30 and 40 if they are placed",
+X	" in the small or large straight categories respectively;",
+X	" otherwise the bonus Yahtzee will score normally for the",
+X	" selected category.",
+X	"",
+X	"End of Game:",
+X	"",
+X	" When all players have completed their score cards",
+X	" the totals of their scores are calculated and the",
+X	" player with the highest score wins."};
+X
+X
+void Rools(win)
+X
+WINDOW *win;
+X
+X	{
+X	int i, j, y_move_increment, x_move_increment, y = 0, x = 0,
+X		text_counter = 0, window_up, window_demanded, tmp_y, tmp_x;
+X	WINDOW *rules_window[WINDOW_COUNT];
+X	char ch;
+X
+X	getyx(win, tmp_y, tmp_x);
+X	wmove(win, 0, 0);
+X	wrefresh(win);
+X	x_move_increment = (COLS - RULE_WINDOW_WIDTH) / WINDOW_COUNT;
+X	y_move_increment = (LINES - RULE_WINDOW_LENGTH) / WINDOW_COUNT;
+X
+X	for (i = 0; i < WINDOW_COUNT; ++i)
+X		{
+X		rules_window[i] = newwin(RULE_WINDOW_LENGTH, RULE_WINDOW_WIDTH,
+X			y, x);
+X		for (j = 1; j < TEXT_LENGTH && text_counter < RULE_LENGTH; ++j)
+X			{
+X			mvwaddstr(rules_window[i], j, 1, Rules[text_counter]);
+X			++text_counter;
+X			}
+#ifdef SYS5_3_COLOR
+X		if (OptUseColor)
+X			wattron(rules_window[i], COLOR_PAIR(PAIR6));
+X		else
+X			wattron(rules_window[i], A_DIM);
+#else
+X		wattron(rules_window[i], A_DIM);
+#endif
+X		box(rules_window[i], 0, 0);
+#ifdef SYS5_3_COLOR
+X		if (OptUseColor)
+X			wattroff(rules_window[i], COLOR_PAIR(PAIR6));
+X		else
+X			wattroff(rules_window[i], A_DIM);
+#else
+X		wattroff(rules_window[i], A_DIM);
+#endif
+X		y += y_move_increment;
+X		x += x_move_increment;
+X		}
+X	window_up = -1;
+X	window_demanded = 0;
+X	do
+X		{
+X		if (window_demanded != window_up)
+X			{
+X			touchwin(rules_window[window_demanded]);
+X			wrefresh(rules_window[window_demanded]);
+X			window_up = window_demanded;
+X			}
+#ifdef SYS5_3_COLOR
+X		if (OptUseColor)
+X			wattron(rules_window[window_up], COLOR_PAIR(PAIR3));
+#endif
+X		mvwaddstr(rules_window[window_up], RULE_WINDOW_LENGTH - 2, 1,
+X			"--(m)ore, (g)ame, (b)ack or ?--");
+#ifdef SYS5_3_COLOR
+X		if (OptUseColor)
+X			wattroff(rules_window[window_up], COLOR_PAIR(PAIR3));
+#endif
+#ifndef SYS5_3_CURSES
+X		wrefresh(rules_window[window_up]);
+#endif
+X		ch = wgetch(rules_window[window_up]);
+X		mvwaddstr(rules_window[window_up], RULE_WINDOW_LENGTH - 2, 1,
+X			"                               ");
+X		wmove(rules_window[window_up], RULE_WINDOW_LENGTH - 2, 1);
+X		wrefresh(rules_window[window_up]);
+X		switch (ch)
+X		    {
+X		    case 'm' :
+X		    case ' ' :
+X			window_demanded = (window_demanded + 1) % WINDOW_COUNT;
+X			break;
+X		    case 'b' :
+X			--window_demanded;
+X			if (window_demanded < 0)
+X				window_demanded = WINDOW_COUNT - 1;
+X			break;
+X		    case 'g' :
+X			break;
+X		    default :
+X			ExtraCheck(rules_window[window_up], ch, HLP_ROOLS);
+X			break;
+X		    }
+X		} while (ch != 'g');
+X	for (i = 1; i < WINDOW_COUNT; ++i)
+X		delwin(rules_window[i]);
+X	touchwin(win);
+X	wmove(win, tmp_y, tmp_x);
+X	wrefresh(win);
+X	}
+SHAR_EOF
+chmod 0644 book.c ||
+echo 'restore of book.c failed'
+Wc_c="`wc -c < 'book.c'`"
+test 5519 -eq "$Wc_c" ||
+	echo 'book.c: original size 5519, current size' "$Wc_c"
+fi
+# ============= comp.c ==============
+if test -f 'comp.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping comp.c (File already exists)'
+else
+echo 'x - extracting comp.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'comp.c' &&
+#include <curses.h>
+#include <assert.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_macros.h"
+#include "yz_funcs.h"
+#include "yz_costs.h"
+X
+extern int OptCheat;
+static float PCostList[YZ_PLAYERS_MAX][YZ_CAT_COUNT][SC_YAHTZEE + 1];
+static int LastWinner = -1;
+X
+void HoldOne2Six();
+void HoldOaK();
+void HoldFullHouse();
+void HoldStraight();
+void HoldYahtzee();
+void HoldChance();
+X
+void InitCosts()
+X
+X	{
+X	int i, j, p;
+X
+X	for (i = 0; i < YZ_CAT_COUNT; ++i)
+X		for (j = 0; j < SC_YAHTZEE + 1; ++j)
+X			for (p = 0; p < YZ_PLAYERS_MAX; ++p)
+X				PCostList[p][i][j] = CostList[i][j];
+X	}
+X
+void AdjustCosts(winner, player_count)
+X
+int winner;
+int player_count;
+X
+X	{
+X	int player, i, j;
+X	float var;
+X	extern double drand48();
+X	extern long lrand48();
+X	extern double sqrt();
+X
+X	for (player = 0; player < player_count; ++player)
+X		if (player != winner)
+X			for (i = 0; i < YZ_CAT_COUNT; ++i)
+X				for (j = 0; j < SC_YAHTZEE + 1; ++j)
+X					{
+X					var = sqrt(Que * (j + 0.1) * drand48());
+X					if (lrand48() & 1)
+X						var = -var;
+X					PCostList[player][i][j] =
+X					    PCostList[winner][i][j] + var;
+X					}
+X	LastWinner = winner;
+X	Que = Que * 0.9999;
+X	DumpCosts();
+X	}
+X
+void DumpCosts()
+X
+X	{
+X	int i, j;
+X	int wrap_5;
+X	FILE *fp;
+X
+X	if (LastWinner == -1)
+X		return;
+X	(void)unlink("oldtmp.h");
+X	(void)link("tmp.h", "oldtmp.h");
+X	(void)unlink("tmp.h");
+X	if ((fp = fopen("tmp.h", "w")) == NULL)
+X		{
+X		fprintf(stderr, "Cannot open cost file\n");
+X		return;
+X		}
+X	fprintf(fp, "static float Que = %f;\n\n", Que);
+X	fprintf(fp,
+X	    "static float CostList[YZ_CAT_COUNT][SC_YAHTZEE + 1] = {{\n\t");
+X	wrap_5 = 0;
+X	for (i = 0; i < YZ_CAT_COUNT; ++i)
+X		{
+X		for (j = 0; j < SC_YAHTZEE + 1; ++j)
+X			{
+X			fprintf(fp, "%f", PCostList[LastWinner][i][j]);
+X			if (wrap_5 < 4)
+X				{
+X				if (j != SC_YAHTZEE)
+X					{
+X					fprintf(fp, ", ");
+X					++wrap_5;
+X					}
+X				}
+X			else
+X				{
+X				wrap_5 = 0;
+X				fprintf(fp, ",\n\t");
+X				}
+X			}
+X		if (i != YZ_CAT_COUNT - 1)
+X			fprintf(fp, "},\n /* %.3d */ {", i);
+X		}
+X	fprintf(fp, "}};\n");
+X	fclose(fp);
+X	}
+X
+int ComputerHold(players, dice, player)
+X
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	int cat;
+X	int i;
+X	int score, bonus, bonus63;
+X	float huer, best_huer = -1000.00;
+X	dice_t new_dice[YZ_DICE];
+X	int held = 0;
+X
+X	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
+X		if (! players[player].used[cat])
+X			{
+X			for (i = 0; i < YZ_DICE; ++i)
+X				new_dice[i] = dice[i];
+X			FindHold(cat, new_dice);
+X			huer = 0.0;
+X			for (i = 0; i < HUER_SAMPLE_SIZE; ++i)
+X				{
+X				ROLL_DICE(new_dice);
+X				Eval(cat, new_dice, &score, &bonus, &bonus63,
+X				    players, player);
+X				huer += score + PCostList[player][cat][score]
+X				    + bonus + bonus63;
+X				}
+X			if (huer > best_huer)
+X				{
+X				best_huer = huer;
+X				held = 0;
+X				for (i = 0; i < YZ_DICE; ++i)
+X					if (dice[i].hold = new_dice[i].hold)
+X						++held;
+X				}
+X			}
+X
+X	return held;
+X	}
+X
+int ComputerSelect(old_win, players, dice, player)
+X
+WINDOW *old_win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player;
+X
+X	{
+X	WINDOW *win;
+X	int cheat, col;
+X	int cat, best_cat;
+X	int score, bonus, bonus63;
+X	float huer, best_huer = -1000.0;
+X
+X	cheat = OptCheat && ! players[player].computer;
+X	if (cheat)
+X		{
+X		col = YZ_PLAYER_COLS * player + YZ_PLAYER_PAD;
+X		win = GrabWindow(old_win, YZ_CAT_COUNT + 2, 15, YZ_TOP - 2,
+X		    col, 0);
+X		}
+X	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
+X		if (! players[player].used[cat])
+X			{
+X			Eval(cat, dice, &score, &bonus, &bonus63, players,
+X			    player);
+X			huer = score + PCostList[player][cat][score] + bonus +
+X			    bonus63;
+X			if (cheat)
+X				{
+X				wmove(win, cat + 1, 1);
+X				wprintw(win, "%f", huer);
+X				}
+X			if (huer > best_huer)
+X				{
+X				best_huer = huer;
+X				best_cat = cat;
+X				}
+X			}
+X	if (cheat)
+X		{
+X		while (wgetch(win) != ' ');
+X		DropWindow(old_win, win);
+X		}
+X
+X	return best_cat;
+X	}
+X
+void FindHold(cat, dice)
+X
+int cat;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	static void (*hold_funs[])() = {HoldOne2Six, HoldOne2Six,
+X	    HoldOne2Six, HoldOne2Six, HoldOne2Six, HoldOne2Six, HoldOaK,
+X	    HoldOaK, HoldFullHouse,
+X	    HoldStraight, HoldStraight, HoldYahtzee, HoldChance};
+X
+X	CLEAR_HOLD(dice);
+X	(*hold_funs[cat])(cat, dice);
+X	}
+X
+static void HoldOne2Six(cat, dice)
+X
+int cat;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	int i;
+X
+X	for (i = 0; i < YZ_DICE; ++i)
+X		if (dice[i].dice == cat)
+X			dice[i].hold = 1;
+X	}
+X
+static void HoldOaK(cat, dice)
+X
+int cat;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	int i;
+X	int reps[YZ_DICE_MAX];
+X	int best_die[YZ_DICE_MAX];
+X	int best_i = 0;
+X	int new_dice[YZ_DICE];
+X
+X	for (i = 0; i < YZ_DICE_MAX; ++i)
+X		reps[i] = best_die[i] = 0;
+X	for (i = 0; i < YZ_DICE; ++i)
+X		new_dice[i] = dice[i].dice;
+X	RDICE_SORT(new_dice);
+X	for (i = 0; i < YZ_DICE; ++i)
+X		if (++reps[new_dice[i]] > best_die[best_i])
+X			{
+X			best_i = new_dice[i];
+X			best_die[best_i] = reps[new_dice[i]];
+X			}
+X	HoldOne2Six(best_i, dice);
+X	}
+X
+static void HoldFullHouse(cat, dice)
+X
+int cat;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	int i;
+X	int reps[YZ_DICE_MAX];
+X
+X	for (i = 0; i < YZ_DICE_MAX; ++i)
+X		reps[i] = 0;
+X	for (i = 0; i < YZ_DICE; ++i)
+X		++reps[dice[i].dice];
+X	for (i = 0; i < YZ_DICE; ++i)
+X		dice[i].hold = reps[dice[i].dice] > 1;
+X	}
+X
+static void HoldStraight(cat, dice)
+X
+int cat;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	int i, j;
+X	int tmp;
+X	int best_run = 0, run;
+X	int start;
+X	int gap, sub_gap;
+X	int new_dice[YZ_DICE];
+X	int gone[YZ_DICE_MAX];
+X	int old_positions[YZ_DICE];
+X	int hold[YZ_DICE], best_hold[YZ_DICE];
+X
+X	gap = cat - SC_STRAIGHT_NORMAL;
+X	sub_gap = gap + 1;
+X	for (i = 0; i < YZ_DICE; ++i)
+X		{
+X		new_dice[i] = dice[i].dice;
+X		old_positions[i] = i;
+X		}
+X	for (i = 0; i < YZ_DICE; ++i)
+X		for (j = i; j < YZ_DICE; ++j)
+X			if (new_dice[i] < new_dice[j])
+X				{
+X				SWAP(new_dice[i], new_dice[j], tmp);
+X				SWAP(old_positions[i], old_positions[j], tmp);
+X				}
+X	for (i = 0; i + gap < YZ_DICE; ++i)
+X		{
+X		for (j = 0; j < YZ_DICE_MAX; ++j)
+X			gone[j] = 0;
+X		for (j = 0; j < YZ_DICE; ++j)
+X			hold[j] = 0;
+X		run = 0;
+X		start = new_dice[i];
+X		for (j = i; j < YZ_DICE && start - new_dice[j] < sub_gap; ++j)
+X			if (! gone[new_dice[j]])
+X				{
+X				gone[new_dice[j]] = 1;
+X				hold[old_positions[j]] = 1;
+X				++run;
+X				}
+X		if (run > best_run)
+X			{
+X			best_run = run;
+X			for (j = 0; j < YZ_DICE; ++j)
+X				best_hold[j] = hold[j];
+X			}
+X		}
+X	for (i = 0; i < YZ_DICE; ++i)
+X		dice[i].hold = best_hold[i];
+X	}
+X
+static void HoldYahtzee(cat, dice)
+X
+int cat;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	HoldOaK(cat, dice);
+X	}
+X
+static void HoldChance(cat, dice)
+X
+int cat;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	int i;
+X
+X	for (i = 0; i < YZ_DICE; ++i)
+X		if (dice[i].dice > YZ_DICE_MAX / 2)
+X			dice[i].hold = 1;
+X	}
+SHAR_EOF
+chmod 0644 comp.c ||
+echo 'restore of comp.c failed'
+Wc_c="`wc -c < 'comp.c'`"
+test 6486 -eq "$Wc_c" ||
+	echo 'comp.c: original size 6486, current size' "$Wc_c"
+fi
+# ============= eval.c ==============
+if test -f 'eval.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping eval.c (File already exists)'
+else
+echo 'x - extracting eval.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'eval.c' &&
+#include <curses.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_macros.h"
+#include "yz_funcs.h"
+X
+void EvOne2Six(), EvOne2Six(), EvOne2Six(), EvOne2Six(), EvOne2Six(),
+X    EvOne2Six(), EvOaK(), EvFullHouse(), EvStraight(), EvYahtzee(), EvChance();
+X
+static int StraightScore[] = {SC_SMALL_STRAIGHT, SC_LARGE_STRAIGHT};
+X
+void Eval(cat, dice, score, bonus, bonus63, players, player)
+X
+int cat;
+dice_t dice[YZ_DICE];
+int *score;
+int *bonus;
+int *bonus63;
+players_t players[YZ_PLAYERS_MAX];
+int player;
+X
+X	{
+X	int yz_score = 0;
+X	int total63;
+X	static void (*eval_funs[])() = {
+X	    EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six,
+X	    EvOaK, EvOaK, EvFullHouse, EvStraight, EvStraight,
+X	    EvYahtzee, EvChance};
+X
+X	*bonus63 = *bonus = *score = 0;
+X	if (cat != YZ_CAT && players[player].score[YZ_CAT])
+X		{
+X		EvYahtzee(dice, &yz_score, cat);
+X		if (yz_score == SC_YAHTZEE)
+X			{
+X			*bonus = SC_YAHTZEE_BONUS;
+X			if (cat == YZ_LG_CAT || cat == YZ_SM_CAT)
+X				{
+X				cat -= SC_STR_SCORE_NORM + SC_STRAIGHT_NORMAL;
+X				*score = StraightScore[cat];
+X				return;
+X				}
+X			}
+X		}
+X	(*eval_funs[cat])(dice, score, cat);
+X	if (cat <= YZ_CAT63 && ! players[player].bonus63)
+X		{
+X		total63 = players[player].total63 + *score;
+X		if (total63 >= YZ_63BONUS_LIMIT)
+X			*bonus63 = YZ_63BONUS_VAL;
+X		}
+X	}
+X
+static void EvOne2Six(dice, score, cat)
+X
+dice_t dice[YZ_DICE];
+int *score;
+int cat;
+X
+X	{
+X	int i;
+X	int bump;
+X
+X	bump = cat + 1;
+X	for (i = 0; i < YZ_DICE; ++i)
+X		if (dice[i].dice == cat)
+X			*score += bump;
+X	}
+X
+static void EvOaK(dice, score, cat)
+X
+dice_t dice[YZ_DICE];
+int *score;
+int cat;
+X
+X	{
+X	int i;
+X	int reps[YZ_DICE_MAX];
+X
+X	cat -= SC_OAK_NORMAL;
+X	for (i = 0; i < YZ_DICE_MAX; ++i)
+X		reps[i] = 0;
+X	for (i = 0; i < YZ_DICE; ++i)
+X		if (++reps[dice[i].dice] >= cat)
+X			{
+X			EvChance(dice, score, cat);
+X			return;
+X			}
+X	}
+X
+static void EvFullHouse(dice, score, cat)
+X
+dice_t dice[YZ_DICE];
+int *score;
+int cat;
+X
+X	{
+X	int new_dice[YZ_DICE];
+X	int i;
+X
+X	for (i = 0; i < YZ_DICE; ++i)
+X		new_dice[i] = dice[i].dice;
+X	DICE_SORT(new_dice);
+X	if ((new_dice[0] == new_dice[1] && new_dice[1] == new_dice[2] &&
+X	     new_dice[3] == new_dice[4]) ||
+X	    (new_dice[2] == new_dice[3] && new_dice[3] == new_dice[4] &&
+X	     new_dice[0] == new_dice[1]))
+X		*score = SC_FULL_HOUSE;
+X	}
+X
+static void EvStraight(dice, score, cat)
+X
+dice_t dice[YZ_DICE];
+int *score;
+int cat;
+X
+X	{
+X	int new_dice[YZ_DICE];
+X	int i, j, run, conseq;
+X	int next;
+X
+X	cat -= SC_STRAIGHT_NORMAL;
+X	for (i = 0; i < YZ_DICE; ++i)
+X		new_dice[i] = dice[i].dice;
+X	DICE_SORT(new_dice);
+X	for (i = 0; i < YZ_DICE - 1; i = j)
+X		{
+X		j = i;
+X		run = 0;
+X		do	{
+X			next = j + 1;
+X			if (conseq = new_dice[j] + 1 == new_dice[next])
+X				++run;
+X			if (! conseq)
+X				conseq = new_dice[j] == new_dice[next];
+X			++j;
+X			} while (conseq && j < YZ_DICE - 1);
+X		if (run >= cat)
+X			{
+X			*score = StraightScore[cat - SC_STR_SCORE_NORM];
+X			return;
+X			}
+X		}
+X	}
+X
+static void EvYahtzee(dice, score, cat)
+X
+dice_t dice[YZ_DICE];
+int *score;
+int cat;
+X
+X	{
+X	EvOaK(dice, score, YZ_DICE + SC_OAK_NORMAL);
+X	if (*score)
+X		*score = SC_YAHTZEE;
+X	}
+X
+static void EvChance(dice, score, cat)
+X
+dice_t dice[YZ_DICE];
+int *score;
+int cat;
+X
+X	{
+X	int i;
+X
+X	for (i = 0; i < YZ_DICE; ++i)
+X		*score += dice[i].dice + 1;
+X	}
+SHAR_EOF
+chmod 0644 eval.c ||
+echo 'restore of eval.c failed'
+Wc_c="`wc -c < 'eval.c'`"
+test 3207 -eq "$Wc_c" ||
+	echo 'eval.c: original size 3207, current size' "$Wc_c"
+fi
+# ============= help.c ==============
+if test -f 'help.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping help.c (File already exists)'
+else
+echo 'x - extracting help.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'help.c' &&
+#include <curses.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_macros.h"
+#include "yz_funcs.h"
+X
+extern int OptUseColor;
+X
+static char *Also[] = {
+X	"Also press:",
+X	"   '?'  - for help any time",
+X	"   's'  - current scores",
+X	"   'b'  - display rules",
+X	"   '^L' - redraw current screen",
+X	"   '!'  - to fork shell",
+X	"   'q'  - to quit"};
+X
+static char Help[HLP_LAST_VALID + 1][YZ_HLP_LINES][YZ_HLP_COLS] = {
+X	{"Player Count",
+X	"Input the number of players,",
+X	"maximum is six, minimum is one."},
+X	{"Continue",
+X	"Press:",
+X	"    'y'  - to play another game.",
+X	"    'n'  - to exit yahtzee."},
+X	{"Player Selection",
+X	"Select which players will be human",
+X	"and which will be simulated.",
+X	"Press:",
+X	"  space  - to toggle human/computer",
+X	"    'j'  - to move cursor down",
+X	"    'k'  - to move cursor up",
+X	"    'n'  - to change name",
+X	" return  - to start game"},
+X	{"Name Input",
+X	"Type in an alphanumeric string,",
+X	"then press return."},
+X	{"Holding Dice",
+X	"Stop dice from being rolled.",
+X	"Press:",
+X	"     ' '  - toggle hold on die",
+X	"'1'..'5'  - toggle hold on die N",
+X	"     'l'  - move cursor right",
+X	"     'h'  - move cursor left",
+X	"     'r'  - computer recommendation",
+X        "     'a'  - hold all dice",
+X	"     'o'  - order dice",
+X	"     't'  - toggle all dice",
+X	"Press return when finished."},
+X	{"Category Selection",
+X	"Select the desired category by",
+X	"moving cursor next to category",
+X	"and pressing return.",
+X	"Press:",
+X	"    'j'  - to move cursor down",
+X	"    'k'  - to move cursor up",
+X	"    'r'  - computer recommendation",
+X	" return  - select current category"},
+X	{"Rules",
+X	"These are the rules for Yahtzee",
+X	"(also known as dice poker).",
+X	"Press:",
+X	"    'm'  - for next page",
+X	"    'b'  - for previous page",
+X	"    'g'  - exit rule display"},
+X	{"High Score",
+X	"This is the current high score file."},
+X	{"Help",
+X	"Exit the help window by pressing",
+X	"space."}};
+X
+void HelpOut(old_win, hlp_no)
+X
+WINDOW *old_win;
+int hlp_no;
+X
+X	{
+X	WINDOW *win;
+X	int ch;
+X	int len;
+X	int i, j;
+X	char msg[YZ_STR_MAX];
+X
+X	if (hlp_no > HLP_LAST_VALID || hlp_no == HLP_NONE)
+X		{
+X		PopError(old_win, "No help available");
+X		return;
+X		}
+X	win = GrabWindow(old_win, YZ_HLP_LINES + 2, YZ_HLP_COLS + 2, 0, 32,
+X	    PAIR1);
+X	sprintf(msg, "Help - %s", Help[hlp_no][0]);
+X	len = strlen(msg);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(PAIR2));
+X	else
+X		wstandout(win);
+#else
+X	wstandout(win);
+#endif
+X	mvwaddstr(win, 1, (YZ_HLP_COLS + 2 - len) / 2, msg);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattroff(win, COLOR_PAIR(PAIR2));
+X	else
+X		wstandend(win);
+#else
+X	wstandend(win);
+#endif
+X	i = 1;
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(PAIR1));
+#endif
+X	while (Help[hlp_no][i][0])
+X		{
+X		mvwaddstr(win, i + 2, 2, Help[hlp_no][i]);
+X		++i;
+X		}
+X	for (j = 0; j < sizeof(Also) / sizeof(Also[0]); ++j)
+X		mvwaddstr(win, i + 3 + j, 2, Also[j]);
+X	mvwaddstr(win, YZ_HLP_LINES, 1, "--press space--");
+#ifndef SYS5_3_CURSES
+X	wrefresh(win);
+#endif
+X	while ((ch = wgetch(win)) != ' ')
+X		ExtraCheck(win, ch, HLP_HLP);
+X	mvwaddstr(win, YZ_HLP_LINES, 1, "               ");
+X	wrefresh(win);
+X	DropWindow(old_win, win);
+X	}
+SHAR_EOF
+chmod 0644 help.c ||
+echo 'restore of help.c failed'
+Wc_c="`wc -c < 'help.c'`"
+test 3140 -eq "$Wc_c" ||
+	echo 'help.c: original size 3140, current size' "$Wc_c"
+fi
+# ============= main.c ==============
+if test -f 'main.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping main.c (File already exists)'
+else
+echo 'x - extracting main.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'main.c' &&
+#include <signal.h>
+#include <curses.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_macros.h"
+#include "yz_funcs.h"
+X
+void InitSignals();
+void Cleanup();
+void DumpCore();
+int InitGame();
+int GetPlayers();
+int Continue();
+void Randomise();
+void DrawBoard();
+void SidesAndPlayers();
+void ProcessArgs();
+static WINDOW *InitScreen();
+X
+static char DieStr[YZ_DICE_MAX][YZ_DICE_Y][YZ_DICE_X] = {
+X    {"       ", "   O   ", "       "},
+X    {" O     ", "       ", "     O "},
+X    {" O     ", "   O   ", "     O "},
+X    {" O   O ", "       ", " O   O "},
+X    {" O   O ", "   O   ", " O   O "},
+X    {" O   O ", " O   O ", " O   O "}};
+X
+int OptLearn = 0;
+static int OptNoDim = 0;
+int OptCheat = 0;
+int OptFast = 0;
+int OptNonStop = 0;
+int OptUseColor = 1;
+X
+int main(argc, argv)
+X
+int argc;
+char *argv[];
+X
+X	{
+X	int player_count;
+X	int winner;
+X	players_t players[YZ_PLAYERS_MAX];
+X	dice_t dice[YZ_DICE];
+X	WINDOW *win;
+X
+X	ProcessArgs(argc, argv);
+X	win = InitScreen();
+X	InitSignals();
+X	InitCosts();
+X	Randomise((unsigned long)time((long *)0));
+X	do	{
+X		player_count = InitGame(win, players, dice);
+X		PlayGame(win, players, dice, player_count);
+X		winner = DetermineWinner(win, players, player_count);
+X		if (OptLearn)
+X			AdjustCosts(winner, player_count);
+X		else
+X			WriteScore(win, players, player_count);
+X		} while (Continue(win));
+X	DisplayScore(win, 0);
+#ifdef BSD_CURSES
+X	wmove(win, LINES - 1, 0);
+X	wrefresh(win);
+X	nocrmode();
+X	echo();
+#endif
+X	endwin();
+X
+X	return 0;
+X	}
+X
+static WINDOW *InitScreen()
+X
+X	{
+X	initscr();
+X	cbreak();
+X	noecho();
+#ifndef BSD_CURSES
+X	OptNoDim = ! tparm(enter_dim_mode);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		{
+X		if (start_color() != OK)
+X			OptUseColor = 0;
+X		else
+X			if (has_colors())
+X				{
+X				init_pair(PAIR1, COLOR_MAGENTA, COLOR_BLACK);
+X				init_pair(PAIR2, COLOR_RED, COLOR_WHITE);
+X				init_pair(PAIR3, COLOR_BLUE, COLOR_BLACK);
+X				init_pair(PAIR4, COLOR_YELLOW, COLOR_BLACK);
+X				init_pair(PAIR5, COLOR_RED, COLOR_BLACK);
+X				init_pair(PAIR6, COLOR_GREEN, COLOR_BLACK);
+X				}
+X			else
+X				OptUseColor = 0;
+X		}
+#endif
+#endif
+X	return newwin(0, 0, 0, 0);
+X	}
+X
+static void ProcessArgs(argc, argv)
+X
+int argc;
+char *argv[];
+X
+X	{
+X	int opt;
+X	char *prog;
+X	extern char *optarg;
+X	extern int optind;
+X
+X	prog = argv[0];
+X	while ((opt = getopt(argc, argv, "snldchfC")) != EOF)
+X		switch (opt)
+X		    {
+X		    case 's' :
+X			DumpScore();
+X			exit(0);
+X			break;
+X		    case 'l' :
+X			OptLearn = 1;
+X			fprintf(stderr, "learning...");
+X			break;
+X		    case 'd' :
+X			OptNoDim = 1;
+X			break;
+X		    case 'c' :
+X			OptCheat = 1;
+X			break;
+X		    case 'f' :
+X			OptFast = 1;
+X			break;
+X		    case 'n' :
+X			OptNonStop = 1;
+X			break;
+X		    case 'C' :
+X			OptUseColor = 0;
+X			break;
+X		    case 'h' :
+X		    case '?' :
+X			fprintf(stderr, "usage: %s -nshfd\n", prog);
+X			fprintf(stderr, "\t-n\t = non-stop\n");
+X			fprintf(stderr, "\t-s\t = high score file\n");
+X			fprintf(stderr, "\t-h\t = display these options\n");
+X			fprintf(stderr, "\t-f\t = fast computer play\n");
+X			fprintf(stderr, "\t-d\t = don't use dim mode\n");
+X			exit(1);
+X			break;
+X		    }
+X	}
+X
+static int Continue(old_win)
+X
+WINDOW *old_win;
+X
+X	{
+X	WINDOW *win;
+X	int ch;
+X	int yes, no;
+X
+X	if (OptNonStop)
+X		return 1;
+X	win = GrabWindow(old_win, 3, 24, 2, YZ_DICE * (YZ_DICE_X +
+X	    YZ_DICE_PAD) - 1, PAIR1);
+X	mvwaddstr(win, 1, 1, "Continue (y) or (n): ");
+#ifndef SYS5_3_CURSES
+X	wrefresh(win);
+#endif
+X	overwrite(win, old_win);
+X	do	{
+X		if (! OptLearn)
+X			ch = wgetch(win);
+X		else
+X			ch = 'y';
+X		yes = ch == 'Y' || ch == 'y' || ch == ' ';
+X		if (! yes && ch != 'n' && ch != 'N')
+X			{
+X			no = 0;
+X			ExtraCheck(win, ch, HLP_CONTINUE);
+X			touchwin(old_win);
+X			wrefresh(old_win);
+X			touchwin(win);
+X			wrefresh(win);
+X			}
+X		else
+X			no = 1;
+X		} while (! no && ! yes);
+X	DropWindow(old_win, win);
+X
+X	return yes;
+X	}
+X
+static int InitGame(win, players, dice)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+X
+X	{
+X	int i, j;
+X	int player_count;
+X
+X	player_count = GetPlayers(win, players);
+X	for (i = 0; i < player_count; ++i)
+X		{
+X		players[i].bonus = 0;
+X		players[i].bonus63 = 0;
+X		players[i].total63 = 0;
+X		players[i].total = 0;
+X		for (j = 0; j < YZ_CAT_COUNT; ++j)
+X			{
+X			players[i].score[j] = 0;
+X			players[i].used[j] = 0;
+X			}
+X		}
+X	CLEAR_HOLD(dice);
+X	ROLL_DICE(dice);
+X	DrawBoard(win, players, dice, player_count);
+X
+X	return player_count;
+X	}
+X
+static void DrawBoard(win, players, dice, player_count)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+dice_t dice[YZ_DICE];
+int player_count;
+X
+X	{
+X	int i, j, die;
+X	int y, x;
+X
+X	werase(win);
+X	SidesAndPlayers(win, players, player_count);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(PAIR6));
+#endif
+X	for (die = 0; die < YZ_DICE; ++die)
+X		{
+X		y = 0;
+X		x = die * (YZ_DICE_X + YZ_DICE_PAD);
+X		for (i = 1; i < YZ_DICE_Y; ++i)
+X			{
+X			mvwaddch(win, y + i, x, ACS_VLINE);
+X			mvwaddch(win, y + i, x + YZ_DICE_X, ACS_VLINE);
+X			}
+X		for (j = 1; j < YZ_DICE_X; ++j)
+X			{
+X			mvwaddch(win, y, x + j, ACS_HLINE);
+X			mvwaddch(win, y + YZ_DICE_Y, j + x, ACS_HLINE);
+X			}
+X		mvwaddch(win, y, x, ACS_ULCORNER);
+X		mvwaddch(win, y + YZ_DICE_Y, x, ACS_LLCORNER);
+X		mvwaddch(win, y + YZ_DICE_Y, x + YZ_DICE_X, ACS_LRCORNER);
+X		mvwaddch(win, y, x + YZ_DICE_X, ACS_URCORNER);
+X		}
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattroff(win, COLOR_PAIR(PAIR6));
+#endif
+X	DisplayDice(win, dice);
+X	}
+X
+void DisplayDie(win, dice, die)
+X
+WINDOW *win;
+dice_t dice[YZ_DICE];
+int die;
+X
+X	{
+X	int y, x;
+X	int i;
+X
+X	x = die * (YZ_DICE_X + YZ_DICE_PAD) + 1;
+X	y = 1;
+X	if (dice[die].hold)
+X		DICEATTRON(win, OptNoDim);
+X	for (i = 0; i < YZ_DICE_Y; ++i)
+X		mvwaddstr(win, y + i, x, DieStr[dice[die].dice][i]);
+X	if (dice[die].hold)
+X		DICEATTROFF(win, OptNoDim);
+X	DieCentre(win, die);
+X	}
+X
+void DieCentre(win, die)
+X
+WINDOW *win;
+int die;
+X
+X	{
+X	wmove(win, YZ_CEN_Y, die * (YZ_DICE_X + YZ_DICE_PAD) + YZ_CEN_X);
+X	wrefresh(win);
+X	}
+X
+static void SidesAndPlayers(win, players, player_count)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+int player_count;
+X
+X	{
+X	int i;
+X	char *name;
+X	static char *cat_names[YZ_CAT_COUNT] = {
+X	    "one", "two", "three", "four", "five", "six",
+X	    "3 of a kind", "4 of a kind", "full house",
+X	    "small straight", YZ_LG_STRAIGHT, "yahtzee", "chance"};
+X
+X	for (i = 0; i < player_count; ++i)
+X		{
+X		name = players[i].name;
+X		mvwaddstr(win, YZ_TOP - 2, YZ_PLAYER_COLS * i + YZ_PLAYER_PAD -
+X		    strlen(name), name);
+X		}
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(PAIR4));
+#endif
+X	for (i = 0; i < YZ_CAT_COUNT; ++i)
+X		mvwaddstr(win, i + YZ_TOP - 1, YZ_SIDE(cat_names[i]),
+X		    cat_names[i]);
+X	wattron(win, A_UNDERLINE);
+X	mvwaddstr(win, YZ_63TOTAL_ROW, YZ_SIDE(YZ_63), YZ_63);
+X	mvwaddstr(win, YZ_63BONUS_ROW, YZ_SIDE(YZ_63BONUS), YZ_63BONUS);
+X	mvwaddstr(win, YZ_BONUS_ROW, YZ_SIDE(YZ_BSTR), YZ_BSTR);
+X	mvwaddstr(win, YZ_TOTAL_ROW, YZ_SIDE(YZ_TOTSTR), YZ_TOTSTR);
+X	wattroff(win, A_UNDERLINE);
+X	wmove(win, 1, YZ_DICE * (YZ_DICE_X + YZ_DICE_PAD));
+X	waddstr(win, YZ_BANNER);
+X	wmove(win, 3, YZ_DICE * (YZ_DICE_X + YZ_DICE_PAD) + 2);
+#ifndef BSD_CURSES
+X	if (! OptNoDim)
+X		wattron(win, A_DIM);
+#endif
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		{
+X		wattroff(win, COLOR_PAIR(PAIR4));
+X		wattron(win, COLOR_PAIR(PAIR2));
+X		}
+#endif
+X	waddstr(win, "uunet!sco!staceyc");
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattroff(win, COLOR_PAIR(PAIR2));
+#endif
+#ifndef BSD_CURSES
+X	if (! OptNoDim)
+X		wattroff(win, A_DIM);
+#endif
+X	}
+X
+void DisplayDice(win, dice)
+X
+WINDOW *win;
+dice_t dice[YZ_DICE];
+X
+X	{
+X	int i, die;
+X	int y, x;
+X
+X	for (die = 0; die < YZ_DICE; ++die)
+X		{
+X		x = die * (YZ_DICE_X + YZ_DICE_PAD) + 1;
+X		y = 1;
+X		if (dice[die].hold)
+X			DICEATTRON(win, OptNoDim);
+X		for (i = 0; i < YZ_DICE_Y; ++i)
+X			mvwaddstr(win, y + i, x, DieStr[dice[die].dice][i]);
+X		if (dice[die].hold)
+X			DICEATTROFF(win, OptNoDim);
+X		}
+X	DieCentre(win, 0);
+X	}
+X
+static int GetPlayers(old_win, players)
+X
+WINDOW *old_win;
+players_t players[YZ_PLAYERS_MAX];
+X
+X	{
+X	int i;
+X	int ch;
+X	int player;
+X	WINDOW *win;
+X	static int player_count = 0;
+X	static int name_change[YZ_PLAYERS_MAX];
+X	static char *type[] = {"Human   ", "Computer"};
+X	static char *prefix[] = {"human", "simul"};
+X	static int names_set = 0;
+X
+X	if (OptNonStop && names_set)
+X		{
+X		DisplayScore(old_win, 0);
+X		return player_count;
+X		}
+X	win = GrabWindow(old_win, 18, 30, 0, 0, PAIR3);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(PAIR4));
+X	else
+X		wstandout(win);
+#else
+X	wstandout(win);
+#endif
+X	mvwaddstr(win, 1, (30 - sizeof(YZ_BANNER)) / 2, YZ_BANNER);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattroff(win, COLOR_PAIR(PAIR4));
+X	else
+X		wstandend(win);
+#else
+X	wstandend(win);
+#endif
+X	mvwaddstr(win, 16, 2, "press '?' for help anytime");
+X	mvwaddstr(win, 3, 4, "Player Count: ");
+X	if (OptLearn)
+X		{
+X		player_count = YZ_PLAYERS_MAX;
+X		wprintw(win, "%d", player_count);
+X		}
+X	else
+X		player_count = GrabDigit(win, 1, YZ_PLAYERS_MAX, HLP_PLAYER);
+X	mvwaddstr(win, 6, 4, "Player information...");
+X	if (! names_set)
+X		{
+X		for (i = 0; i < YZ_PLAYERS_MAX; ++i)
+X			{
+X			players[i].computer = 1;
+X			sprintf(players[i].name, "%s-%d",
+X			    prefix[players[i].computer], i + 1);
+X			name_change[i] = 0;
+X			}
+X		names_set = 1;
+X		}
+X	for (i = 0; i < player_count; ++i)
+X		{
+X		mvwaddstr(win, i + 8, 3, players[i].name);
+X		mvwaddstr(win, i + 8, YZ_NAME_MAX + 4,
+X		    type[players[i].computer]);
+X		}
+X	player = 0;
+X	wmove(win, 8 + player, YZ_NAME_MAX + 4);
+X	wrefresh(win);
+X	while ((ch = OptLearn ? YZ_CR : wgetch(win)) != YZ_CR)
+X		{
+X		switch (ch)
+X		    {
+X		    case ' ' :
+X			players[player].computer = ! players[player].computer;
+X			mvwaddstr(win, player + 8, YZ_NAME_MAX + 4,
+X			    type[players[player].computer]);
+X			if (! name_change[player])
+X				{
+X				(void)sprintf(players[player].name, "%s-%d",
+X				    prefix[players[player].computer],
+X				    player + 1);
+X				mvwaddstr(win, player + 8, 3,
+X				    players[player].name);
+X				}
+X			break;
+X		    case 'j' :
+X			player = (player + 1) % player_count;
+X			break;
+X		    case 'k' :
+X			--player;
+X			if (player < 0)
+X				player = player_count - 1;
+X			break;
+X		    case 'n' :
+X			wmove(win, player + 8, 3);
+X			GetString(win, players[player].name, YZ_NAME_MAX - 1,
+X			    1);
+X			if (! players[player].name[0])
+X				{
+X				(void)sprintf(players[player].name, "%s-%d",
+X				    prefix[players[player].computer],
+X				    player + 1);
+X				name_change[player] = 0;
+X				}
+X			else
+X				name_change[player] = 1;
+X			mvwaddstr(win, player + 8, 3, players[player].name);
+X			player = (player + 1) % player_count;
+X			break;
+X		    default :
+X			ExtraCheck(win, ch, HLP_NAMES);
+X			break;
+X		    }
+X		wmove(win, 8 + player, YZ_NAME_MAX + 4);
+#ifndef SYS5_3_CURSES
+X		wrefresh(win);
+#endif
+X		}
+X	if (! OptFast)
+X		sleep(2);
+X	DropWindow(old_win, win);
+X
+X	return player_count;
+X	}
+X
+static void Randomise(seed)
+X
+unsigned long seed;
+X
+X	{
+X	srand48(seed);
+X	}
+X
+static void InitSignals()
+X
+X	{
+X	if (OptLearn)
+X		{
+X		(void)signal(SIGINT, SIG_IGN);
+X		(void)signal(SIGHUP, SIG_IGN);
+X		}
+X	else
+X		(void)signal(SIGINT, Cleanup);
+X	(void)signal(SIGTERM, Cleanup);
+X	(void)signal(SIGQUIT, DumpCore);
+X	}
+X
+static void Cleanup(sig_no)
+X
+int sig_no;
+X
+X	{
+X	endwin();
+X	if (OptLearn)
+X		DumpCosts();
+X	if (sig_no != SIGINT)
+X		fprintf(stderr, "Signal %d received.\n", sig_no);
+X	exit(1);
+X	}
+X
+static void DumpCore(sig_no)
+X
+int sig_no;
+X
+X	{
+X	if (sig_no != SIGQUIT)
+X		Cleanup(sig_no);
+X	(void)signal(SIGQUIT, SIG_DFL);
+X	kill(getpid(), SIGQUIT);
+X	pause();
+X	exit(1);
+X	}
+SHAR_EOF
+chmod 0644 main.c ||
+echo 'restore of main.c failed'
+Wc_c="`wc -c < 'main.c'`"
+test 11222 -eq "$Wc_c" ||
+	echo 'main.c: original size 11222, current size' "$Wc_c"
+fi
+# ============= score.c ==============
+if test -f 'score.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping score.c (File already exists)'
+else
+echo 'x - extracting score.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'score.c' &&
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <curses.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_funcs.h"
+#include "yz_macros.h"
+X
+char *GrabName();
+int NCmp();
+extern int OptCheat;
+extern int OptNonStop;
+extern int OptUseColor;
+X
+void DisplayScore(old_win, prompt)
+X
+WINDOW *old_win;
+int prompt;
+X
+X	{
+X	char *name;
+X	FILE *fp;
+X	char msg[YZ_STR_MAX];
+X	score_t board[HS_ENTRIES];
+X	int i, count;
+X	WINDOW *win;
+X	int ch;
+X
+X	if ((name = GrabName(old_win, 0)) == 0)
+X		return;
+X	if ((fp = fopen(name, "r")) == 0)
+X		{
+X		sprintf(msg, "Cannot read %s.", name);
+X		PopError(old_win, msg);
+X		return;
+X		}
+X	count = fread((char *)board, sizeof(score_t), HS_ENTRIES, fp);
+X	(void)fclose(fp);
+X	if (count == 0)
+X		{
+X		PopError(old_win, "High score file empty.");
+X		return;
+X		}
+X	win = GrabWindow(old_win, HS_ENTRIES + 6, 25, 2, 10, PAIR6);
+X	wmove(win, 1, 4);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(PAIR5));
+#endif
+X	wprintw(win, "Top %d High Scores", HS_ENTRIES);
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattroff(win, COLOR_PAIR(PAIR5));
+#endif
+X	for (i = 0; i < count; ++i)
+X		{
+X		wmove(win, i + 3, 2);
+X		wprintw(win, "%s", board[i].name);
+X		wmove(win, i + 3, 15);
+X		wprintw(win, "%5d", board[i].score);
+X		}
+X	if (prompt)
+X		mvwaddstr(win, HS_ENTRIES + 6 - 2, 1, "--press space--");
+X	else
+X		{
+X		wmove(win, HS_ENTRIES + 4, 1);
+X		wrefresh(win);
+X		}
+X	if (prompt)
+X		{
+#ifndef SYS5_3_CURSES
+X		wrefresh(win);
+#endif
+X		while ((ch = wgetch(win)) != ' ')
+X			ExtraCheck(win, ch, HLP_HS);
+X		mvwaddstr(win, HS_ENTRIES + 6 - 2, 1, "               ");
+X		wrefresh(win);
+X		DropWindow(old_win, win);
+X		}
+X	else
+X		if (OptNonStop)
+X			{
+X			(void)sleep(4);
+X			DropWindow(old_win, win);
+X			}
+X	}
+X
+void WriteScore(win, players, player_count)
+X
+WINDOW *win;
+players_t players[YZ_PLAYERS_MAX];
+int player_count;
+X
+X	{
+X	char *hs_name;
+X	FILE *fp;
+X	int limit;
+X	int count, i, player;
+X	char msg[YZ_STR_MAX];
+X	score_t board[HS_ENTRIES + YZ_PLAYERS_MAX];
+X
+X	if (OptCheat)
+X		{
+X		PopError(win, "No highscore update with cheat option.");
+X		return;
+X		}
+X	if ((hs_name = GrabName(win, 1)) == 0)
+X		return;
+X	if ((fp = fopen(hs_name, "r")) == NULL)
+X		{
+X		sprintf(msg, "Cannot read %s.", hs_name);
+X		PopError(win, msg);
+X		return;
+X		}
+X	count = fread((char *)board, sizeof(score_t), HS_ENTRIES, fp);
+X	(void)fclose(fp);
+X	limit = count + player_count;
+X	for (i = count, player = 0; i < limit; ++i, ++player)
+X		{
+X		board[i].score = players[player].total;
+X		strcpy(board[i].name, players[player].name);
+X		}
+X	qsort((char *)board, (unsigned)limit, (unsigned)sizeof(score_t), NCmp);
+X	if ((fp = fopen(hs_name, "w")) == NULL)
+X		{
+X		sprintf(msg, "Cannot write %s.", hs_name);
+X		PopError(win, msg);
+X		return;
+X		}
+X	if (limit > HS_ENTRIES)
+X		limit = HS_ENTRIES;
+X	fwrite((char *)board, (unsigned)sizeof(score_t), (unsigned)limit, fp);
+X	(void)fclose(fp);
+X	}
+X
+static int NCmp(item1, item2)
+X
+score_t *item1;
+score_t *item2;
+X
+X	{
+X	if (item1->score < item2->score)
+X		return 1;
+X	if (item1->score > item2->score)
+X		return -1;
+X	return 0;
+X	}
+X
+static char *GrabName(win, create)
+X
+WINDOW *win;
+int create;
+X
+X	{
+X	FILE *fp;
+X	char *env_name;
+X	struct stat stat_buf;
+X	char err_buf[YZ_STR_MAX];
+X	static char hs_name[YZ_FN_MAX] = {0};
+X	extern char *getenv();
+X
+X	env_name = getenv("YAHTZEE_HS");
+X	if (env_name)
+X		strcpy(hs_name, env_name);
+X	else
+X		strcpy(hs_name, YZ_HS_FILE);
+X	if (stat(hs_name, &stat_buf) == -1)
+X		{
+X		sprintf(err_buf, "Cannot stat %s: %d.", hs_name, errno);
+X		if (win)
+X			PopError(win, err_buf);
+X		else
+X			fprintf(stderr, "%s\n", err_buf);
+X		if (create)
+X			{
+X			sprintf(err_buf, "Attempting to create: %s.", hs_name);
+X			PopError(win, err_buf);
+X			if ((fp = fopen(hs_name, "w")) == NULL)
+X				{
+X				sprintf(err_buf, "Cannot create %s.", hs_name);
+X				PopError(win, err_buf);
+X				PopError(win,
+X				    "Check YAHTZEE_HS and yahtzee makefile.");
+X				return 0;
+X				}
+X			(void)fclose(fp);
+X			}
+X		else
+X			return 0;
+X		}
+X
+X	return hs_name;
+X	}
+X
+void DumpScore()
+X
+X	{
+X	char *name;
+X	FILE *fp;
+X	score_t board[HS_ENTRIES];
+X	int i, count;
+X
+X	if ((name = GrabName((WINDOW *)0, 0)) == 0)
+X		return;
+X	if ((fp = fopen(name, "r")) == 0)
+X		{
+X		fprintf(stderr, "Cannot read %s.\n", name);
+X		return;
+X		}
+X	count = fread((char *)board, sizeof(score_t), HS_ENTRIES, fp);
+X	(void)fclose(fp);
+X	if (count == 0)
+X		{
+X		fprintf(stderr, "High score file empty.\n");
+X		return;
+X		}
+X	fprintf(stdout, "    Yahtzee Top %d High Scores\n\n", HS_ENTRIES);
+X	for (i = 0; i < count; ++i)
+X		fprintf(stdout, "\t%s\t %5d\n", board[i].name, board[i].score);
+X	}
+SHAR_EOF
+chmod 0644 score.c ||
+echo 'restore of score.c failed'
+Wc_c="`wc -c < 'score.c'`"
+test 4477 -eq "$Wc_c" ||
+	echo 'score.c: original size 4477, current size' "$Wc_c"
+fi
+# ============= scr.c ==============
+if test -f 'scr.c' -a X"$1" != X"-c"; then
+	echo 'x - skipping scr.c (File already exists)'
+else
+echo 'x - extracting scr.c (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'scr.c' &&
+#include <curses.h>
+#include <ctype.h>
+#include "yz_consts.h"
+#include "yz_types.h"
+#include "yz_macros.h"
+#include "yz_funcs.h"
+X
+extern int OptFast;
+extern int OptUseColor;
+X
+int AbsolutelySure();
+void ForkShell();
+X
+WINDOW *GrabWindow(old_win, y, x, beg_y, beg_x, color_pair)
+X
+WINDOW *old_win;
+int y, x;
+int beg_y, beg_x;
+int color_pair;
+X
+X	{
+X	WINDOW *win;
+#ifdef SYS5_3_COLOR
+X	int i, j;
+#endif
+X
+X	win = newwin(y, x, beg_y, beg_x);
+#ifndef BSD_CURSES
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattron(win, COLOR_PAIR(color_pair));
+X	else
+X		wattron(win, A_DIM);
+#else
+X	wattron(win, A_DIM);
+#endif
+#endif
+X	box(win, 0, 0);
+#ifndef BSD_CURSES
+#ifdef SYS5_3_COLOR
+X	if (OptUseColor)
+X		wattroff(win, COLOR_PAIR(color_pair));
+X	else
+X		wattroff(win, A_DIM);
+#else
+X	wattroff(win, A_DIM);
+#endif
+#endif
+X	touchwin(win);
+X
+X	return win;
+X	}
+X
+int GrabDigit(win, min_valid, max_valid, hlp_no)
+X
+WINDOW *win;
+int min_valid;
+int max_valid;
+int hlp_no;
+X
+X	{
+X	int y, x;
+X	int ch;
+X	char dig_str[YZ_STR_MAX];
+X	int len = 0;
+X	int max_len;
+X	int ret_val = 0;
+X
+X	getyx(win, y, x);
+X	(void)sprintf(dig_str, "%d", max_valid);
+X	max_len = strlen(dig_str);
+#ifndef SYS5_3_CURSES
+X	wrefresh(win);
+#endif
+X	while ((ch = wgetch(win)) != YZ_CR || (ch == YZ_CR && len == 0))
+X		{
+X		switch (ch)
+X		    {
+X		    case 8 :
+X		    case 127 :
+X			if (len == 0)
+X				flash();
+X			else
+X				{
+X				--len;
+X				mvwaddch(win, y, x + len, ' ');
+X				wmove(win, y, x + len);
+X				}
+X			break;
+X		    default :
+X			if (isdigit(ch))
+X				if (len == max_len)
+X					flash();
+X				else
+X					{
+X					mvwaddch(win, y, x + len, ch);
+X					dig_str[len++] = ch;
+X					dig_str[len] = '\0';
+X					}
+X			else
+X				ExtraCheck(win, ch, hlp_no);
+X		    }
+X		wrefresh(win);
+X		}
+X	(void)sscanf(dig_str, "%d", &ret_val);
+X	if (ret_val < min_valid || ret_val > max_valid)
+X		{
+X		flash();
+X		for (len = 0; len < max_len; ++len)
+X			mvwaddch(win, y, x + len, ' ');
+X		wmove(win, y, x);
+X		wrefresh(win);
+X		ret_val = GrabDigit(win, min_valid, max_valid, hlp_no);
+X		}
+X
+X	return ret_val;
+X	}
+X
+void ExtraCheck(win, ch, hlp_no)
+X
+WINDOW *win;
+int ch;
+int hlp_no;
+X
+X	{
+X	switch (ch)
+X	    {
+X	    case '?' :
+X		HelpOut(win, hlp_no);
+X		break;
+X	    case '\014' :
+/*		touchwin(curscr); */
+X		wrefresh(curscr);
+X		touchwin(win);
+X		wrefresh(win);
+X		break;
+X	    case 'b' :
+X		Rools(win);
+X		break;
+X	    case 'F' :
+X		OptFast = 1;
+X		break;
+X	    case 's' :
+X		DisplayScore(win, 1);
+X		break;
+X	    case '!' :
+X		ForkShell(win);
+X		break;
+X	    case 'q' :
+X		if (! AbsolutelySure(win))
+X			return;
+X		DisplayScore(win, 0);
+X		nocbreak();
+X		echo();
+X		endwin();
+X		exit(1);
+X		break;
+X	    default :
+X		flash();
+X		break;
+X	    }
+X	}
+X
+static void ForkShell(old_win)
+X
+WINDOW *old_win;
+X
+X	{
+X	WINDOW *win;
+X	char *shell;
+X	char command[YZ_COMMAND];
+X	static char prompt[] = "Command: ";
+X	extern char *getenv();
+X
+X	win = GrabWindow(old_win, 3, YZ_COMMAND + sizeof(prompt) + 1,
+X	    LINES - 4, 0, 0);
+X	mvwaddstr(win, 1, 1, prompt);
+X	GetString(win, command, YZ_COMMAND - 1, 0);
+X	DropWindow(old_win, win);
+X	endwin();
+X	if (! command[0])
+X		{
+X		if (! (shell = getenv("SHELL")))
+X			shell = "/bin/sh";
+X		system(shell);
+X		}
+X	else
+X		{
+X		system(command);
+X		sleep(3);
+X		}
+X	wrefresh(curscr);
+X	touchwin(old_win);
+X	wrefresh(old_win);
+X	}
+X
+static int AbsolutelySure(old_win)
+X
+WINDOW *old_win;
+X
+X	{
+X	WINDOW *win;
+X	int ch;
+X	int quit;
+X	int done = 0;
+X	static char prompt[] = "Quit Yahtzee - are you absolutely sure? ";
+X
+X	win = GrabWindow(old_win, 3, sizeof(prompt) + 3, 12,
+X	    (COLS - sizeof(prompt)) / 2, PAIR6);
+X	mvwaddstr(win, 1, 1, prompt);
+#ifndef SYS5_3_CURSES
+X	wrefresh(win);
+#endif
+X	do	{
+X		ch = wgetch(win);
+X		switch (ch)
+X		    {
+X		    case 'y' :
+X		    case 'Y' :
+X		    case ' ' :
+X			quit = 1;
+X			done = 1;
+X			break;
+X		    case 'n' :
+X		    case 'N' :
+X			quit = 0;
+X			done = 1;
+X			break;
+X		    default :
+X			ExtraCheck(win, ch, HLP_NONE);
+X			break;
+X		    }
+X		} while (! done);
+X	DropWindow(old_win, win);
+X
+X	return quit;
+X	}
+X
+void DropWindow(old_win, win)
+X
+WINDOW *old_win;
+WINDOW *win;
+X
+X	{
+X	delwin(win);
+X	touchwin(old_win);
+X	wrefresh(old_win);
+X	}
+X
+void GetString(win, str, max_len, alphanum)
+X
+WINDOW *win;
+char *str;
+int max_len;
+X
+X	{
+X	int y, x;
+X	int i;
+X	int len = 0;
+X	int ch;
+X
+X	getyx(win, y, x);
+X	for (i = 0; i < max_len; ++i)
+X		waddch(win, ' ');
+X	wmove(win, y, x);
+X	wrefresh(win);
+X	while ((ch = wgetch(win)) != YZ_CR)
+X		{
+X		switch (ch)
+X		    {
+X		    case 8 :
+X		    case 127 :
+X			if (len > 0)
+X				{
+X				--len;
+X				mvwaddch(win, y, x + len, ' ');
+X				}
+X			else
+X				flash();
+X			break;
+X		    default :
+X			if (len < max_len && (! alphanum || isalnum(ch)))
+X				{
+X				str[len] = ch;
+X				mvwaddch(win, y, x + len, ch);
+X				++len;
+X				}
+X			else
+X				if (alphanum)
+X					ExtraCheck(win, ch, HLP_GETSTR);
+X				else
+X					flash();
+X			break;
+X		    }
+X		wmove(win, y, x + len);
+X		wrefresh(win);
+X		}
+X	str[len] = 0;
+X	}
+X
+void PutNumber(win, y, x, val)
+X
+WINDOW *win;
+int y, x;
+int val;
+X
+X	{
+X	char buf[YZ_STR_MAX];
+X
+X	(void)sprintf(buf, "%d", val);
+X	mvwaddstr(win, y, x - strlen(buf), buf);
+X	}
+X
+void PopError(old_win, str)
+X
+WINDOW *old_win;
+char *str;
+X
+X	{
+X	WINDOW *win;
+X	int len;
+X
+X	len = strlen(str) + 2 + 2;
+X	win = GrabWindow(old_win, 3, len, 12, (COLS - len) / 2, PAIR5);
+X	mvwaddstr(win, 1, 2, str);
+X	wrefresh(win);
+X	sleep(3);
+X	DropWindow(old_win, win);
+X	}
+X
+#if defined(BSD_CURSES) || defined (SYS5_2_CURSES)
+X
+#undef box
+X
+int BSDbox(win)
+X
+WINDOW *win;
+X
+X	{
+X	wstandout(win);
+X	box(win, ':', '-');
+X	wstandend(win);
+X	}
+X
+#endif
+SHAR_EOF
+chmod 0644 scr.c ||
+echo 'restore of scr.c failed'
+Wc_c="`wc -c < 'scr.c'`"
+test 5308 -eq "$Wc_c" ||
+	echo 'scr.c: original size 5308, current size' "$Wc_c"
+fi
+# ============= yz_consts.h ==============
+if test -f 'yz_consts.h' -a X"$1" != X"-c"; then
+	echo 'x - skipping yz_consts.h (File already exists)'
+else
+echo 'x - extracting yz_consts.h (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'yz_consts.h' &&
+#include "port.h"
+X
+#define YZ_PLAYERS_MAX 6
+#define YZ_NAME_MAX 9
+#define YZ_CAT_COUNT 13
+#define YZ_DICE 5
+#define YZ_DICE_MAX 6
+#define YZ_STR_MAX 256
+#define YZ_COMMAND 40
+#define YZ_FN_MAX 256
+#define YZ_CAT63 (YZ_DICE_MAX - 1)
+#define YZ_63BONUS_VAL 35
+#define YZ_63BONUS_LIMIT 63
+#define YZ_CAT 11
+#define YZ_LG_CAT 10
+#define YZ_SM_CAT 9
+X
+#define YZ_BANNER "Y a h t z e e   2 . 1"
+#define YZ_DICE_Y 4
+#define YZ_DICE_X 8
+#define YZ_CEN_Y (YZ_DICE_Y - 1)
+#define YZ_CEN_X ((YZ_DICE_X + 2) / 2 - 1)
+#define YZ_DICE_PAD 3
+#define YZ_PLAYER_COLS (YZ_NAME_MAX + 1)
+#define YZ_LG_STRAIGHT "large straight"
+#define YZ_63 "63 sub total"
+#define YZ_63BONUS "63 bonus"
+#define YZ_BSTR "yahtzee bonus"
+#define YZ_TOTSTR "total"
+#define YZ_TOP (YZ_DICE_Y + 3)
+#define YZ_PLAYER_PAD 25
+#define YZ_63TOTAL_ROW (YZ_CAT_COUNT + YZ_TOP)
+#define YZ_63BONUS_ROW (YZ_CAT_COUNT + YZ_TOP + 1)
+#define YZ_BONUS_ROW (YZ_CAT_COUNT + YZ_TOP + 2)
+#define YZ_TOTAL_ROW (YZ_CAT_COUNT + YZ_TOP + 3)
+#define YZ_HLP_COLS 37
+#define YZ_HLP_LINES 22
+X
+#define HLP_PLAYER 0
+#define HLP_CONTINUE 1
+#define HLP_NAMES 2
+#define HLP_GETSTR 3
+#define HLP_HOLD 4
+#define HLP_SELECT 5
+#define HLP_ROOLS 6
+#define HLP_HS 7
+#define HLP_HLP 8
+#define HLP_LAST_VALID HLP_HLP
+#define HLP_NONE -1
+X
+#define SC_OAK_NORMAL 3
+#define SC_STRAIGHT_NORMAL 6
+#define SC_STR_SCORE_NORM 3
+X
+#define SC_YAHTZEE 50
+#define SC_YAHTZEE_BONUS 100
+#define SC_LARGE_STRAIGHT 40
+#define SC_SMALL_STRAIGHT 30
+#define SC_FULL_HOUSE 25
+X
+#define HS_ENTRIES 15
+X
+#define HUER_SAMPLE_SIZE 100
+SHAR_EOF
+chmod 0644 yz_consts.h ||
+echo 'restore of yz_consts.h failed'
+Wc_c="`wc -c < 'yz_consts.h'`"
+test 1525 -eq "$Wc_c" ||
+	echo 'yz_consts.h: original size 1525, current size' "$Wc_c"
+fi
+# ============= yz_costs.h ==============
+if test -f 'yz_costs.h' -a X"$1" != X"-c"; then
+	echo 'x - skipping yz_costs.h (File already exists)'
+else
+echo 'x - extracting yz_costs.h (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'yz_costs.h' &&
+static float Que = 0.5;
+X
+static float CostList[YZ_CAT_COUNT][SC_YAHTZEE + 1] = {
+X /* one */ {1.000000, 0.300000, 1.000000, 1.000000, 1.700000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+X	1.000000},
+X /* two */ {-1.000000, -1.000000, -2.000000, -0.714286, -1.000000,
+X	-0.428571, 1.000000, -0.142857, 0.142857, 0.142857,
+X	0.428571, 0.428571, 0.714286, 0.714286, 1.000000,
+X	1.000000, 1.285714, 1.285714, 1.571429, 1.571429,
+X	1.857143, 1.857143, 2.142857, 2.142857, 2.428571,
+X	2.428571, 2.714286, 2.714286, 3.000000, 3.000000,
+X	3.285714, 3.285714, 3.571429, 3.571429, 3.857143,
+X	3.857143, 4.142857, 4.142857, 4.428571, 4.428571,
+X	-5.000000, 4.714286, 5.000000, 5.000000, 5.285714,
+X	5.285714, 5.571429, 5.571429, 5.857143, 5.857143,
+X	6.142857},
+X /* three */ {-7.000000, -7.000000, -7.000000, -7.000000, -4.000000,
+X	-4.000000, -5.000000, -3.500000, -3.000000, 2.000000,
+X	2.000000, 2.000000, -1.000000, 5.000000, 5.000000,
+X	11.000000, 8.000000, 8.000000, 11.000000, 11.000000,
+X	11.000000, 14.000000, 14.000000, 14.000000, 17.000000,
+X	17.000000, 17.000000, 20.000000, 20.000000, 20.000000,
+X	23.000000, 23.000000, 23.000000, 26.000000, 26.000000,
+X	26.000000, 29.000000, 29.000000, 29.000000, 32.000000,
+X	32.000000, 32.000000, 35.000000, 35.000000, 35.000000,
+X	38.000000, 38.000000, 38.000000, 41.000000, 41.000000,
+X	41.000000},
+X /* four */ {-27.000000, -27.000000, -27.000000, -27.000000, -19.000000,
+X	-19.000000, -19.000000, -19.000000, -11.000000, -5.100000,
+X	-5.500000, -11.000000, 9.000000, 9.000000, 9.000000,
+X	9.000000, 14.000000, 14.000000, 14.000000, 14.000000,
+X	19.000000, 19.000000, 19.000000, 19.000000, 24.000000,
+X	24.000000, 24.000000, 24.000000, 29.000000, 29.000000,
+X	29.000000, 29.000000, 34.000000, 34.000000, 34.000000,
+X	34.000000, 39.000000, 39.000000, 39.000000, 39.000000,
+X	44.000000, 44.000000, 44.000000, 44.000000, 49.000000,
+X	49.000000, 49.000000, 49.000000, 54.000000, 54.000000,
+X	54.000000},
+X /* five */ {-31.000000, -31.000000, -31.000000, -31.000000, -31.000000,
+X	-22.000000, -22.000000, -22.000000, -22.000000, -22.000000,
+X	-13.000000, -13.000000, -9.000000, -10.000000, -13.000000,
+X	9.000000, 10.000000, 10.000000, 10.000000, 10.000000,
+X	16.000000, 16.000000, 16.000000, 16.000000, 16.000000,
+X	22.000000, 22.000000, 22.000000, 22.000000, 22.000000,
+X	28.000000, 28.000000, 28.000000, 28.000000, 28.000000,
+X	34.000000, 34.000000, 34.000000, 34.000000, 34.000000,
+X	40.000000, 40.000000, 40.000000, 40.000000, 40.000000,
+X	46.000000, 46.000000, 46.000000, 46.000000, 46.000000,
+X	52.000000},
+X /* six */ {-35.000000, -35.000000, -35.000000, -35.000000, -35.000000,
+X	-35.000000, -25.000000, -25.000000, -25.000000, -25.000000,
+X	-25.000000, -25.000000, -18.000000, -10.000000, -8.000000,
+X	-9.000000, -10.000000, -15.000000, 6.700000, 11.000000,
+X	11.000000, 11.000000, 11.000000, 11.000000, 18.000000,
+X	18.000000, 18.000000, 18.000000, 18.000000, 18.000000,
+X	19.000000, 25.000000, 25.000000, 25.000000, 25.000000,
+X	25.000000, 32.000000, 32.000000, 32.000000, 32.000000,
+X	32.000000, 32.000000, 39.000000, 39.000000, 39.000000,
+X	39.000000, 39.000000, 39.000000, 46.000000, 46.000000,
+X	46.000000},
+X /* 3 of a kind */ {-2.000000, 0.100000, 0.200000, 0.300000, 0.400000,
+X	-1.000000, -1.100000, -4.500000, -5.500000, -8.000000,
+X	-10.000000, -10.000000, -12.000000, -9.900000, -12.000000,
+X	-12.000000, -9.700000, -11.500000, -12.000000, -9.900000,
+X	-12.000000, -11.000000, -1.000000, -2.000000, 0.400000,
+X	-0.500000, 2.600000, 2.700000, 2.800000, 2.900000,
+X	3.000000, 3.100000, 3.200000, 3.300000, 3.400000,
+X	3.500000, 3.600000, 3.700000, 3.800000, 3.900000,
+X	4.000000, 4.100000, 4.200000, 4.300000, 4.400000,
+X	4.500000, 4.600000, 4.700000, 4.800000, 4.900000,
+X	5.000000},
+X /* 4 of a kind */ {-1.500000, 0.111111, 0.222222, 0.333333, 0.444444,
+X	0.555556, -1.000000, -3.377778, -4.000000, -7.000000,
+X	-9.000000, -4.222220, -10.000000, -5.000000, -6.500000,
+X	-5.999999, -5.700000, -8.500000, -8.500000, 2.111111,
+X	2.222222, 2.333333, 2.444444, 2.555556, 2.666667,
+X	2.777778, 2.888889, 3.000000, 3.111111, 3.222222,
+X	3.333333, 3.444444, 3.555556, 3.666667, 3.777778,
+X	3.888889, 4.000000, 4.111111, 4.222222, 4.333333,
+X	4.444444, 4.555556, 4.666667, 4.777778, 4.888889,
+X	5.000000, 5.111111, 5.222222, 5.333333, 5.444444,
+X	5.555556},
+X /* full house */ {-3.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000},
+X /* small straight */ {-3.000000, 0.000000, 0.000000, -1.000000, -6.000000,
+X	-7.000000, -7.000000, -7.000000, -8.000000, -8.000000,
+X	-8.000000, -10.000000, -8.000000, -7.000000, -9.000000,
+X	-9.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000},
+X /* large straight */ {-5.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000},
+X /* yahtzee */ {-1.601000, 4.000000, 5.000000, 13.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	50.00000},
+X /* chance */ {-8.000000, -9.000000, -10.000000, -11.000000, -12.000000,
+X	-13.000000, -14.000000, -15.000000, -16.000000, -17.000000,
+X	-17.000000, -17.000000, -17.000000, -17.000000, -14.000000,
+X	-16.000000, -16.000000, -16.000000, -16.000000, -16.000000,
+X	-17.000000, -17.000000, -17.000000, -17.000000, -20.000000,
+X	-21.000000, -22.000000, -23.000000, -24.000000, -25.000000,
+X	-26.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+X	0.000000}};
+SHAR_EOF
+chmod 0644 yz_costs.h ||
+echo 'restore of yz_costs.h failed'
+Wc_c="`wc -c < 'yz_costs.h'`"
+test 7430 -eq "$Wc_c" ||
+	echo 'yz_costs.h: original size 7430, current size' "$Wc_c"
+fi
+# ============= yz_funcs.h ==============
+if test -f 'yz_funcs.h' -a X"$1" != X"-c"; then
+	echo 'x - skipping yz_funcs.h (File already exists)'
+else
+echo 'x - extracting yz_funcs.h (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'yz_funcs.h' &&
+WINDOW *GrabWindow();
+int GrabDigit();
+void HelpOut();
+void DropWindow();
+void ExtraCheck();
+void GetString();
+void PlayGame();
+void DisplayDice();
+int ComputerHold();
+void DisplayDie();
+void DieCentre();
+void PutNumber();
+int ComputerSelect();
+void Eval();
+void FindHold();
+void InitCosts();
+int DetermineWinner();
+void AdjustCosts();
+void DumpCosts();
+void Rools();
+void WriteScore();
+void PopError();
+void DisplayScore();
+void DumpScore();
+#if defined(BSD_CURSES) || defined(SYS5_2_CURSES)
+int BSDbox();
+#endif
+SHAR_EOF
+chmod 0644 yz_funcs.h ||
+echo 'restore of yz_funcs.h failed'
+Wc_c="`wc -c < 'yz_funcs.h'`"
+test 514 -eq "$Wc_c" ||
+	echo 'yz_funcs.h: original size 514, current size' "$Wc_c"
+fi
+# ============= yz_macros.h ==============
+if test -f 'yz_macros.h' -a X"$1" != X"-c"; then
+	echo 'x - skipping yz_macros.h (File already exists)'
+else
+echo 'x - extracting yz_macros.h (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'yz_macros.h' &&
+#define ROLL_DICE(dice_struct) \
+X	{ \
+X	int i; \
+X	extern long lrand48(); \
+X	for (i = 0; i < YZ_DICE; ++i) \
+X		if (! (dice_struct)[i].hold) \
+X			(dice_struct)[i].dice = lrand48() % YZ_DICE_MAX; \
+X	}
+X
+#define CLEAR_HOLD(dice) \
+X	{ \
+X	int i; \
+X	for (i = 0; i < YZ_DICE; ++i) \
+X		(dice)[i].hold = 0; \
+X	}
+X
+#define DICE_SORT(dice) GEN_SORT(dice, >)
+#define RDICE_SORT(dice) GEN_SORT(dice, <)
+#define SWAP(a, b, tmp) ((tmp) = (a), (a) = (b), (b) = (tmp))
+X
+#define GEN_SORT(dice, order) \
+X	{ \
+X	int i, j; \
+X	int tmp; \
+X	for (i = 0; i < YZ_DICE; ++i) \
+X		for (j = i; j < YZ_DICE; ++j) \
+X			if ((dice)[i] order (dice)[j]) \
+X				SWAP((dice)[i], (dice)[j], tmp); \
+X	}
+X
+#define DSTRUCT_SORT(d) \
+X	{ \
+X	int i, j; \
+X	dice_t tmp; \
+X	for (i = 0; i < YZ_DICE; ++i) \
+X		for (j = i; j < YZ_DICE; ++j) \
+X			if ((d)[i].dice > (d)[j].dice) \
+X				SWAP((d)[i], (d)[j], tmp); \
+X	}
+X
+#define YZ_SIDE(str) (sizeof(YZ_LG_STRAIGHT) - strlen(str) - 1)
+X
+#define BDICEATTRON(win, dim) ((dim) ? wattron(win, A_STANDOUT) : \
+X	wattron(win, A_DIM))
+#define BDICEATTROFF(win, dim) ((dim) ? wattroff(win, A_STANDOUT) : \
+X	wattroff(win, A_DIM))
+X
+#ifndef SYS5_3_COLOR
+#define DICEATTRON(win, dim) BDICEATTRON(win, dim)
+#define DICEATTROFF(win, dim) BDICEATTROFF(win, dim)
+#else
+#define DICEATTRON(win, dim) (OptUseColor ? wattron(win, COLOR_PAIR(PAIR3)) : \
+X	BDICEATTRON(win, dim))
+#define DICEATTROFF(win, dim) (OptUseColor ? wattroff(win, COLOR_PAIR(PAIR3)) \
+X	: BDICEATTROFF(win, dim))
+#endif
+SHAR_EOF
+chmod 0644 yz_macros.h ||
+echo 'restore of yz_macros.h failed'
+Wc_c="`wc -c < 'yz_macros.h'`"
+test 1454 -eq "$Wc_c" ||
+	echo 'yz_macros.h: original size 1454, current size' "$Wc_c"
+fi
+# ============= yz_types.h ==============
+if test -f 'yz_types.h' -a X"$1" != X"-c"; then
+	echo 'x - skipping yz_types.h (File already exists)'
+else
+echo 'x - extracting yz_types.h (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'yz_types.h' &&
+typedef struct players_t {
+X	int computer;
+X	int score[YZ_CAT_COUNT];
+X	int bonus;
+X	int bonus63;
+X	int total63;
+X	int total;
+X	int used[YZ_CAT_COUNT];
+X	char name[YZ_NAME_MAX];
+X	} players_t;
+X
+typedef struct dice_t {
+X	int dice;
+X	int hold;
+X	} dice_t;
+X
+typedef struct score_t {
+X	char name[YZ_NAME_MAX];
+X	int score;
+X	} score_t;
+SHAR_EOF
+chmod 0644 yz_types.h ||
+echo 'restore of yz_types.h failed'
+Wc_c="`wc -c < 'yz_types.h'`"
+test 317 -eq "$Wc_c" ||
+	echo 'yz_types.h: original size 317, current size' "$Wc_c"
+fi
+# ============= port.h ==============
+if test -f 'port.h' -a X"$1" != X"-c"; then
+	echo 'x - skipping port.h (File already exists)'
+else
+echo 'x - extracting port.h (Text)'
+sed 's/^X//' << 'SHAR_EOF' > 'port.h' &&
+/* Establish curses version and random number generator */
+X
+#ifndef ACS_PLUS                            /* must not be System 5.3 curses */
+#ifdef A_DIM                                       /* probably System 5.[12] */
+#define SYS5_2_CURSES
+#else                                                 /* probably BSD curses */
+#define BSD_CURSES
+#endif
+#else
+#define SYS5_3_CURSES
+#ifdef COLOR_RED
+#define SYS5_3_COLOR
+#endif
+#endif
+X
+#define PAIR1 1
+#define PAIR2 2
+#define PAIR3 3
+#define PAIR4 4
+#define PAIR5 5
+#define PAIR6 6
+X
+#ifndef BSD_CURSES
+#include <term.h>
+#endif
+X
+#ifdef BSD_CURSES
+#define A_DIM A_STANDOUT           /* this works for BSD curses on Xenix 2.3 */
+#define flushinp()
+#define resetterm() system("stty intr '^c' erase '^?' echo")
+#define flash() putchar(7)
+#ifdef sun
+#define wattron(win, attr) wstandout(win)
+#define wattroff(win, attr) wstandend(win)
+#else
+#define cbreak crmode
+#endif
+#endif
+X
+#ifndef SYS5_3_CURSES
+#define ACS_HLINE '-'
+#define ACS_VLINE '|'
+#define ACS_URCORNER '.'
+#define ACS_ULCORNER '.'
+#define ACS_LLCORNER '`'
+#define ACS_LRCORNER '\''
+#endif
+X
+#if defined(SYS5_2_CURSES) || defined(BSD_CURSES)
+#define box(win, a, b) BSDbox(win)
+#endif
+X
+#if defined(BSD_CURSES) && ! defined(sun)
+#define YZ_CR '\r'
+#else
+#define YZ_CR '\n'
+#endif
+X
+#if defined(BSD_RANDOM) || (defined(BSD_CURSES) && ! defined(M_XENIX))
+#define lrand48 random
+#define srand48 srandom
+#endif
+SHAR_EOF
+chmod 0644 port.h ||
+echo 'restore of port.h failed'
+Wc_c="`wc -c < 'port.h'`"
+test 1402 -eq "$Wc_c" ||
+	echo 'port.h: original size 1402, current size' "$Wc_c"
+fi
+exit 0
