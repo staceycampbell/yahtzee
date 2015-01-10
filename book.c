@@ -88,9 +88,7 @@ static char *Rules[] = {
 
 
 void
-Rools(win)
-     WINDOW *win;
-
+Rools(WINDOW *win)
 {
 	int i, j, y_move_increment, x_move_increment, y = 0, x = 0, text_counter = 0, window_up, window_demanded, tmp_y, tmp_x;
 	WINDOW *rules_window[WINDOW_COUNT];

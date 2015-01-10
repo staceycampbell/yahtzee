@@ -5,57 +5,10 @@
 #include "yz_macros.h"
 #include "yz_funcs.h"
 
-static void EvOne2Six(), EvOne2Six(), EvOne2Six(), EvOne2Six(), EvOne2Six(), EvOne2Six(), EvOaK(), EvFullHouse(), EvStraight(), EvYahtzee(), EvChance();
-
 static int StraightScore[] = { SC_SMALL_STRAIGHT, SC_LARGE_STRAIGHT };
 
-void
-Eval(cat, dice, score, bonus, bonus63, players, player)
-     int cat;
-     dice_t dice[YZ_DICE];
-     int *score;
-     int *bonus;
-     int *bonus63;
-     players_t players[YZ_PLAYERS_MAX];
-     int player;
-
-{
-	int yz_score = 0;
-	int total63;
-	static void (*eval_funs[]) () =
-	{
-	EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOaK, EvOaK, EvFullHouse, EvStraight, EvStraight, EvYahtzee, EvChance};
-
-	*bonus63 = *bonus = *score = 0;
-	if (cat != YZ_CAT && players[player].score[YZ_CAT])
-	{
-		EvYahtzee(dice, &yz_score, cat);
-		if (yz_score == SC_YAHTZEE)
-		{
-			*bonus = SC_YAHTZEE_BONUS;
-			if (cat == YZ_LG_CAT || cat == YZ_SM_CAT)
-			{
-				cat -= SC_STR_SCORE_NORM + SC_STRAIGHT_NORMAL;
-				*score = StraightScore[cat];
-				return;
-			}
-		}
-	}
-	(*eval_funs[cat]) (dice, score, cat);
-	if (cat <= YZ_CAT63 && !players[player].bonus63)
-	{
-		total63 = players[player].total63 + *score;
-		if (total63 >= YZ_63BONUS_LIMIT)
-			*bonus63 = YZ_63BONUS_VAL;
-	}
-}
-
 static void
-EvOne2Six(dice, score, cat)
-     dice_t dice[YZ_DICE];
-     int *score;
-     int cat;
-
+EvOne2Six(dice_t dice[YZ_DICE], int *score, int cat)
 {
 	int i;
 	int bump;
@@ -67,11 +20,16 @@ EvOne2Six(dice, score, cat)
 }
 
 static void
-EvOaK(dice, score, cat)
-     dice_t dice[YZ_DICE];
-     int *score;
-     int cat;
+EvChance(dice_t dice[YZ_DICE], int *score, int cat)
+{
+	int i;
 
+	for (i = 0; i < YZ_DICE; ++i)
+		*score += dice[i].dice + 1;
+}
+
+static void
+EvOaK(dice_t dice[YZ_DICE], int *score, int cat)
 {
 	int i;
 	int reps[YZ_DICE_MAX];
@@ -88,11 +46,7 @@ EvOaK(dice, score, cat)
 }
 
 static void
-EvFullHouse(dice, score, cat)
-     dice_t dice[YZ_DICE];
-     int *score;
-     int cat;
-
+EvFullHouse(dice_t dice[YZ_DICE], int *score, int cat)
 {
 	int new_dice[YZ_DICE];
 	int i;
@@ -106,11 +60,7 @@ EvFullHouse(dice, score, cat)
 }
 
 static void
-EvStraight(dice, score, cat)
-     dice_t dice[YZ_DICE];
-     int *score;
-     int cat;
-
+EvStraight(dice_t dice[YZ_DICE], int *score, int cat)
 {
 	int new_dice[YZ_DICE];
 	int i, j, run, conseq;
@@ -143,26 +93,40 @@ EvStraight(dice, score, cat)
 }
 
 static void
-EvYahtzee(dice, score, cat)
-     dice_t dice[YZ_DICE];
-     int *score;
-     int cat;
-
+EvYahtzee(dice_t dice[YZ_DICE], int *score, int cat)
 {
 	EvOaK(dice, score, YZ_DICE + SC_OAK_NORMAL);
 	if (*score)
 		*score = SC_YAHTZEE;
 }
 
-static void
-EvChance(dice, score, cat)
-     dice_t dice[YZ_DICE];
-     int *score;
-     int cat;
-
+void
+Eval(int cat, dice_t dice[YZ_DICE], int *score, int *bonus, int *bonus63, players_t players[YZ_PLAYERS_MAX], int player)
 {
-	int i;
+	int yz_score = 0;
+	int total63;
+	static void (*eval_funs[]) () = {EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOne2Six, EvOaK, EvOaK, EvFullHouse, EvStraight, EvStraight, EvYahtzee, EvChance};
 
-	for (i = 0; i < YZ_DICE; ++i)
-		*score += dice[i].dice + 1;
+	*bonus63 = *bonus = *score = 0;
+	if (cat != YZ_CAT && players[player].score[YZ_CAT])
+	{
+		EvYahtzee(dice, &yz_score, cat);
+		if (yz_score == SC_YAHTZEE)
+		{
+			*bonus = SC_YAHTZEE_BONUS;
+			if (cat == YZ_LG_CAT || cat == YZ_SM_CAT)
+			{
+				cat -= SC_STR_SCORE_NORM + SC_STRAIGHT_NORMAL;
+				*score = StraightScore[cat];
+				return;
+			}
+		}
+	}
+	(*eval_funs[cat])(dice, score, cat);
+	if (cat <= YZ_CAT63 && !players[player].bonus63)
+	{
+		total63 = players[player].total63 + *score;
+		if (total63 >= YZ_63BONUS_LIMIT)
+			*bonus63 = YZ_63BONUS_VAL;
+	}
 }

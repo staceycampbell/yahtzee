@@ -10,18 +10,55 @@
 #include "yz_funcs.h"
 #include "yz_macros.h"
 
-static char *GrabName();
-static int NCmp();
 extern int OptCheat;
 extern int OptNonStop;
 extern int OptUseColor;
 extern int OptFast;
 
-void
-DisplayScore(old_win, prompt)
-     WINDOW *old_win;
-     int prompt;
+static char *
+GrabName(WINDOW *win, int create)
+{
+	FILE *fp;
+	char *env_name;
+	struct stat stat_buf;
+	char err_buf[YZ_STR_MAX];
+	static char hs_name[YZ_FN_MAX] = { 0 };
+	extern char *getenv();
 
+	env_name = getenv("YAHTZEE_HS");
+	if (env_name)
+		strcpy(hs_name, env_name);
+	else
+		strcpy(hs_name, YZ_HS_FILE);
+	if (stat(hs_name, &stat_buf) == -1)
+	{
+		sprintf(err_buf, "Cannot stat %s: %d.", hs_name, errno);
+		if (win)
+			PopError(win, err_buf);
+		else
+			fprintf(stderr, "%s\n", err_buf);
+		if (create)
+		{
+			sprintf(err_buf, "Attempting to create: %s.", hs_name);
+			PopError(win, err_buf);
+			if ((fp = fopen(hs_name, "w")) == NULL)
+			{
+				sprintf(err_buf, "Cannot create %s.", hs_name);
+				PopError(win, err_buf);
+				PopError(win, "Check YAHTZEE_HS and yahtzee makefile.");
+				return 0;
+			}
+			(void)fclose(fp);
+		}
+		else
+			return 0;
+	}
+
+	return hs_name;
+}
+
+void
+DisplayScore(WINDOW *old_win, int prompt)
 {
 	char *name;
 	FILE *fp;
@@ -92,12 +129,18 @@ DisplayScore(old_win, prompt)
 	}
 }
 
-void
-WriteScore(win, players, player_count)
-     WINDOW *win;
-     players_t players[YZ_PLAYERS_MAX];
-     int player_count;
+static int
+NCmp(score_t *item1, score_t *item2)
+{
+	if (item1->score < item2->score)
+		return 1;
+	if (item1->score > item2->score)
+		return -1;
+	return 0;
+}
 
+void
+WriteScore(WINDOW *win, players_t players[YZ_PLAYERS_MAX], int player_count)
 {
 	char *hs_name;
 	FILE *fp;
@@ -127,7 +170,7 @@ WriteScore(win, players, player_count)
 		board[i].score = players[player].total;
 		strcpy(board[i].name, players[player].name);
 	}
-	qsort((char *)board, (unsigned)limit, (unsigned)sizeof(score_t), NCmp);
+	qsort((char *)board, limit, (unsigned)sizeof(score_t), (void *)NCmp);
 	if ((fp = fopen(hs_name, "w")) == NULL)
 	{
 		sprintf(msg, "Cannot write %s.", hs_name);
@@ -140,66 +183,8 @@ WriteScore(win, players, player_count)
 	(void)fclose(fp);
 }
 
-static int
-NCmp(item1, item2)
-     score_t *item1;
-     score_t *item2;
-
-{
-	if (item1->score < item2->score)
-		return 1;
-	if (item1->score > item2->score)
-		return -1;
-	return 0;
-}
-
-static char *
-GrabName(win, create)
-     WINDOW *win;
-     int create;
-
-{
-	FILE *fp;
-	char *env_name;
-	struct stat stat_buf;
-	char err_buf[YZ_STR_MAX];
-	static char hs_name[YZ_FN_MAX] = { 0 };
-	extern char *getenv();
-
-	env_name = getenv("YAHTZEE_HS");
-	if (env_name)
-		strcpy(hs_name, env_name);
-	else
-		strcpy(hs_name, YZ_HS_FILE);
-	if (stat(hs_name, &stat_buf) == -1)
-	{
-		sprintf(err_buf, "Cannot stat %s: %d.", hs_name, errno);
-		if (win)
-			PopError(win, err_buf);
-		else
-			fprintf(stderr, "%s\n", err_buf);
-		if (create)
-		{
-			sprintf(err_buf, "Attempting to create: %s.", hs_name);
-			PopError(win, err_buf);
-			if ((fp = fopen(hs_name, "w")) == NULL)
-			{
-				sprintf(err_buf, "Cannot create %s.", hs_name);
-				PopError(win, err_buf);
-				PopError(win, "Check YAHTZEE_HS and yahtzee makefile.");
-				return 0;
-			}
-			(void)fclose(fp);
-		}
-		else
-			return 0;
-	}
-
-	return hs_name;
-}
-
 void
-DumpScore()
+DumpScore(void)
 {
 	char *name;
 	FILE *fp;

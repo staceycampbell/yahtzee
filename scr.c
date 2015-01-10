@@ -11,8 +11,194 @@
 extern int OptFast;
 extern int OptUseColor;
 
-static int AbsolutelySure();
-static void ForkShell();
+void
+DropWindow(WINDOW *old_win, WINDOW *win)
+{
+	delwin(win);
+	touchwin(old_win);
+	wrefresh(old_win);
+}
+
+void
+GetString(WINDOW *win, char *str, int max_len, int alphanum)
+{
+	int y, x;
+	int i;
+	int len = 0;
+	int ch;
+
+	getyx(win, y, x);
+	for (i = 0; i < max_len; ++i)
+		waddch(win, ' ');
+	wmove(win, y, x);
+	wrefresh(win);
+	while ((ch = wgetch(win)) != YZ_CR)
+	{
+		switch (ch)
+		{
+		case 8:
+		case 127:
+			if (len > 0)
+			{
+				--len;
+				mvwaddch(win, y, x + len, ' ');
+			}
+			else
+				flash();
+			break;
+		default:
+			if (len < max_len && (!alphanum || isalnum(ch)))
+			{
+				str[len] = ch;
+				mvwaddch(win, y, x + len, ch);
+				++len;
+			}
+			else if (alphanum)
+				ExtraCheck(win, ch, HLP_GETSTR);
+			else
+				flash();
+			break;
+		}
+		wmove(win, y, x + len);
+		wrefresh(win);
+	}
+	str[len] = 0;
+}
+
+static void
+ForkShell(WINDOW *old_win)
+{
+	WINDOW *win;
+	char *shell;
+	char command[YZ_COMMAND];
+	static char prompt[] = "Command: ";
+	extern char *getenv();
+
+	win = GrabWindow(old_win, 3, YZ_COMMAND + sizeof(prompt) + 1, LINES - 4, 0, 0);
+	mvwaddstr(win, 1, 1, prompt);
+	GetString(win, command, YZ_COMMAND - 1, 0);
+	DropWindow(old_win, win);
+	endwin();
+	if (!command[0])
+	{
+		if (!(shell = getenv("SHELL")))
+			shell = "/bin/sh";
+		system(shell);
+	}
+	else
+	{
+		system(command);
+		sleep(3);
+	}
+	wrefresh(curscr);
+	touchwin(old_win);
+	wrefresh(old_win);
+}
+
+static int
+AbsolutelySure(WINDOW *old_win)
+{
+	WINDOW *win;
+	int ch;
+	int quit;
+	int done = 0;
+	static char prompt[] = "Quit Yahtzee - are you absolutely sure? ";
+
+	win = GrabWindow(old_win, 3, sizeof(prompt) + 3, 12, (COLS - sizeof(prompt)) / 2, PAIR6);
+	mvwaddstr(win, 1, 1, prompt);
+#ifndef SYS5_3_CURSES
+	wrefresh(win);
+#endif
+	do
+	{
+		ch = wgetch(win);
+		switch (ch)
+		{
+		case 'y':
+		case 'Y':
+		case ' ':
+			quit = 1;
+			done = 1;
+			break;
+		case 'n':
+		case 'N':
+			quit = 0;
+			done = 1;
+			break;
+		default:
+			ExtraCheck(win, ch, HLP_NONE);
+			break;
+		}
+	}
+	while (!done);
+	DropWindow(old_win, win);
+
+	return quit;
+}
+
+void
+ExtraCheck(WINDOW *win, int ch, int hlp_no)
+{
+	switch (ch)
+	{
+	case '?':
+		HelpOut(win, hlp_no);
+		break;
+	case '\014':
+/*		touchwin(curscr); */
+		wrefresh(curscr);
+		touchwin(win);
+		wrefresh(win);
+		break;
+	case 'b':
+		Rools(win);
+		break;
+	case 'F':
+		OptFast = 1;
+		break;
+	case 's':
+		DisplayScore(win, 1);
+		break;
+	case '!':
+		ForkShell(win);
+		break;
+	case 'q':
+		if (!AbsolutelySure(win))
+			return;
+		DisplayScore(win, 0);
+		nocbreak();
+		echo();
+		endwin();
+		exit(1);
+		break;
+	default:
+		flash();
+		break;
+	}
+}
+
+void
+PutNumber(WINDOW *win, int y, int x, int val)
+{
+	char buf[YZ_STR_MAX];
+
+	(void)sprintf(buf, "%d", val);
+	mvwaddstr(win, y, x - strlen(buf), buf);
+}
+
+void
+PopError(WINDOW *old_win, char *str)
+{
+	WINDOW *win;
+	int len;
+
+	len = strlen(str) + 2 + 2;
+	win = GrabWindow(old_win, 3, len, 12, (COLS - len) / 2, PAIR5);
+	mvwaddstr(win, 1, 2, str);
+	wrefresh(win);
+	sleep(3);
+	DropWindow(old_win, win);
+}
 
 WINDOW *
 GrabWindow(WINDOW *old_win, int y, int x, int beg_y, int beg_x, int color_pair)
@@ -104,195 +290,6 @@ GrabDigit(WINDOW *win, int min_valid, int max_valid, int hlp_no)
 	}
 
 	return ret_val;
-}
-
-void
-ExtraCheck(WINDOW *win, int ch, int hlp_no)
-{
-	switch (ch)
-	{
-	case '?':
-		HelpOut(win, hlp_no);
-		break;
-	case '\014':
-/*		touchwin(curscr); */
-		wrefresh(curscr);
-		touchwin(win);
-		wrefresh(win);
-		break;
-	case 'b':
-		Rools(win);
-		break;
-	case 'F':
-		OptFast = 1;
-		break;
-	case 's':
-		DisplayScore(win, 1);
-		break;
-	case '!':
-		ForkShell(win);
-		break;
-	case 'q':
-		if (!AbsolutelySure(win))
-			return;
-		DisplayScore(win, 0);
-		nocbreak();
-		echo();
-		endwin();
-		exit(1);
-		break;
-	default:
-		flash();
-		break;
-	}
-}
-
-static void
-ForkShell(WINDOW *old_win)
-{
-	WINDOW *win;
-	char *shell;
-	char command[YZ_COMMAND];
-	static char prompt[] = "Command: ";
-	extern char *getenv();
-
-	win = GrabWindow(old_win, 3, YZ_COMMAND + sizeof(prompt) + 1, LINES - 4, 0, 0);
-	mvwaddstr(win, 1, 1, prompt);
-	GetString(win, command, YZ_COMMAND - 1, 0);
-	DropWindow(old_win, win);
-	endwin();
-	if (!command[0])
-	{
-		if (!(shell = getenv("SHELL")))
-			shell = "/bin/sh";
-		system(shell);
-	}
-	else
-	{
-		system(command);
-		sleep(3);
-	}
-	wrefresh(curscr);
-	touchwin(old_win);
-	wrefresh(old_win);
-}
-
-static int
-AbsolutelySure(WINDOW *old_win)
-{
-	WINDOW *win;
-	int ch;
-	int quit;
-	int done = 0;
-	static char prompt[] = "Quit Yahtzee - are you absolutely sure? ";
-
-	win = GrabWindow(old_win, 3, sizeof(prompt) + 3, 12, (COLS - sizeof(prompt)) / 2, PAIR6);
-	mvwaddstr(win, 1, 1, prompt);
-#ifndef SYS5_3_CURSES
-	wrefresh(win);
-#endif
-	do
-	{
-		ch = wgetch(win);
-		switch (ch)
-		{
-		case 'y':
-		case 'Y':
-		case ' ':
-			quit = 1;
-			done = 1;
-			break;
-		case 'n':
-		case 'N':
-			quit = 0;
-			done = 1;
-			break;
-		default:
-			ExtraCheck(win, ch, HLP_NONE);
-			break;
-		}
-	}
-	while (!done);
-	DropWindow(old_win, win);
-
-	return quit;
-}
-
-void
-DropWindow(WINDOW *old_win, WINDOW *win)
-{
-	delwin(win);
-	touchwin(old_win);
-	wrefresh(old_win);
-}
-
-void
-GetString(WINDOW *win, char *str, int max_len, int alphanum)
-{
-	int y, x;
-	int i;
-	int len = 0;
-	int ch;
-
-	getyx(win, y, x);
-	for (i = 0; i < max_len; ++i)
-		waddch(win, ' ');
-	wmove(win, y, x);
-	wrefresh(win);
-	while ((ch = wgetch(win)) != YZ_CR)
-	{
-		switch (ch)
-		{
-		case 8:
-		case 127:
-			if (len > 0)
-			{
-				--len;
-				mvwaddch(win, y, x + len, ' ');
-			}
-			else
-				flash();
-			break;
-		default:
-			if (len < max_len && (!alphanum || isalnum(ch)))
-			{
-				str[len] = ch;
-				mvwaddch(win, y, x + len, ch);
-				++len;
-			}
-			else if (alphanum)
-				ExtraCheck(win, ch, HLP_GETSTR);
-			else
-				flash();
-			break;
-		}
-		wmove(win, y, x + len);
-		wrefresh(win);
-	}
-	str[len] = 0;
-}
-
-void
-PutNumber(WINDOW *win, int y, int x, int val)
-{
-	char buf[YZ_STR_MAX];
-
-	(void)sprintf(buf, "%d", val);
-	mvwaddstr(win, y, x - strlen(buf), buf);
-}
-
-void
-PopError(WINDOW *old_win, char *str)
-{
-	WINDOW *win;
-	int len;
-
-	len = strlen(str) + 2 + 2;
-	win = GrabWindow(old_win, 3, len, 12, (COLS - len) / 2, PAIR5);
-	mvwaddstr(win, 1, 2, str);
-	wrefresh(win);
-	sleep(3);
-	DropWindow(old_win, win);
 }
 
 #if defined(BSD_CURSES) || defined (SYS5_2_CURSES)

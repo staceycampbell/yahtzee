@@ -10,18 +10,6 @@
 #include "yz_macros.h"
 #include "yz_funcs.h"
 
-static void InitSignals();
-static void Cleanup();
-static void DumpCore();
-static int InitGame();
-static int GetPlayers();
-static int Continue();
-static void Randomise();
-static void DrawBoard();
-static void SidesAndPlayers();
-static void ProcessArgs();
-static WINDOW *InitScreen();
-
 static char DieStr[YZ_DICE_MAX][YZ_DICE_Y][YZ_DICE_X] = {
 	{"       ", "   O   ", "       "},
 	{" O     ", "       ", "     O "},
@@ -38,277 +26,9 @@ int OptFast = 0;
 int OptNonStop = 0;
 int OptUseColor = 1;
 
-int
-main(argc, argv)
-     int argc;
-     char *argv[];
-
-{
-	int player_count;
-	int winner;
-	players_t players[YZ_PLAYERS_MAX];
-	dice_t dice[YZ_DICE];
-	WINDOW *win;
-
-	ProcessArgs(argc, argv);
-	win = InitScreen();
-	InitSignals();
-	InitCosts();
-	Randomise((unsigned long)time((long *)0));
-	do
-	{
-		player_count = InitGame(win, players, dice);
-		PlayGame(win, players, dice, player_count);
-		winner = DetermineWinner(win, players, player_count);
-		if (OptLearn)
-			AdjustCosts(winner, player_count);
-		else
-			WriteScore(win, players, player_count);
-	}
-	while (Continue(win));
-	DisplayScore(win, 0);
-#ifdef BSD_CURSES
-	wmove(win, LINES - 1, 0);
-	wrefresh(win);
-	nocrmode();
-	echo();
-#endif
-	endwin();
-
-	return 0;
-}
-
-static WINDOW *
-InitScreen()
-{
-	initscr();
-	cbreak();
-	noecho();
-#ifndef BSD_CURSES
-	OptNoDim = !tparm(enter_dim_mode);
-#ifdef SYS5_3_COLOR
-	if (OptUseColor)
-	{
-		if (start_color() != OK)
-			OptUseColor = 0;
-		else if (has_colors())
-		{
-			init_pair(PAIR1, COLOR_MAGENTA, COLOR_BLACK);
-			init_pair(PAIR2, COLOR_RED, COLOR_WHITE);
-			init_pair(PAIR3, COLOR_BLUE, COLOR_BLACK);
-			init_pair(PAIR4, COLOR_YELLOW, COLOR_BLACK);
-			init_pair(PAIR5, COLOR_RED, COLOR_BLACK);
-			init_pair(PAIR6, COLOR_GREEN, COLOR_BLACK);
-		}
-		else
-			OptUseColor = 0;
-	}
-#endif
-#endif
-	return newwin(0, 0, 0, 0);
-}
 
 static void
-ProcessArgs(argc, argv)
-     int argc;
-     char *argv[];
-
-{
-	int opt;
-	char *prog;
-
-	prog = argv[0];
-	while ((opt = getopt(argc, argv, "snldchfC")) != EOF)
-		switch (opt)
-		{
-		case 's':
-			DumpScore();
-			exit(0);
-			break;
-		case 'l':
-			OptLearn = 1;
-			fprintf(stderr, "learning...");
-			break;
-		case 'd':
-			OptNoDim = 1;
-			break;
-		case 'c':
-			OptCheat = 1;
-			break;
-		case 'f':
-			OptFast = 1;
-			break;
-		case 'n':
-			OptNonStop = 1;
-			break;
-		case 'C':
-			OptUseColor = 0;
-			break;
-		case 'h':
-		case '?':
-			fprintf(stderr, "usage: %s -nshfd\n", prog);
-			fprintf(stderr, "\t-n\t = non-stop\n");
-			fprintf(stderr, "\t-s\t = high score file\n");
-			fprintf(stderr, "\t-h\t = display these options\n");
-			fprintf(stderr, "\t-f\t = fast computer play\n");
-			fprintf(stderr, "\t-d\t = don't use dim mode\n");
-			exit(1);
-			break;
-		}
-}
-
-static int
-Continue(old_win)
-     WINDOW *old_win;
-
-{
-	WINDOW *win;
-	int ch;
-	int yes, no;
-
-	if (OptNonStop)
-		return 1;
-	win = GrabWindow(old_win, 3, 24, 2, YZ_DICE * (YZ_DICE_X + YZ_DICE_PAD) - 1, PAIR1);
-	mvwaddstr(win, 1, 1, "Continue (y) or (n): ");
-#ifndef SYS5_3_CURSES
-	wrefresh(win);
-#endif
-	overwrite(win, old_win);
-	do
-	{
-		if (!OptLearn)
-			ch = wgetch(win);
-		else
-			ch = 'y';
-		yes = ch == 'Y' || ch == 'y' || ch == ' ';
-		if (!yes && ch != 'n' && ch != 'N')
-		{
-			no = 0;
-			ExtraCheck(win, ch, HLP_CONTINUE);
-			touchwin(old_win);
-			wrefresh(old_win);
-			touchwin(win);
-			wrefresh(win);
-		}
-		else
-			no = 1;
-	}
-	while (!no && !yes);
-	DropWindow(old_win, win);
-
-	return yes;
-}
-
-static int
-InitGame(win, players, dice)
-     WINDOW *win;
-     players_t players[YZ_PLAYERS_MAX];
-     dice_t dice[YZ_DICE];
-
-{
-	int i, j;
-	int player_count;
-
-	player_count = GetPlayers(win, players);
-	for (i = 0; i < player_count; ++i)
-	{
-		players[i].bonus = 0;
-		players[i].bonus63 = 0;
-		players[i].total63 = 0;
-		players[i].total = 0;
-		for (j = 0; j < YZ_CAT_COUNT; ++j)
-		{
-			players[i].score[j] = 0;
-			players[i].used[j] = 0;
-		}
-	}
-	CLEAR_HOLD(dice);
-	ROLL_DICE(dice);
-	DrawBoard(win, players, dice, player_count);
-
-	return player_count;
-}
-
-static void
-DrawBoard(win, players, dice, player_count)
-     WINDOW *win;
-     players_t players[YZ_PLAYERS_MAX];
-     dice_t dice[YZ_DICE];
-     int player_count;
-
-{
-	int i, j, die;
-	int y, x;
-
-	werase(win);
-	SidesAndPlayers(win, players, player_count);
-#ifdef SYS5_3_COLOR
-	if (OptUseColor)
-		wattron(win, COLOR_PAIR(PAIR6));
-#endif
-	for (die = 0; die < YZ_DICE; ++die)
-	{
-		y = 0;
-		x = die * (YZ_DICE_X + YZ_DICE_PAD);
-		for (i = 1; i < YZ_DICE_Y; ++i)
-		{
-			mvwaddch(win, y + i, x, ACS_VLINE);
-			mvwaddch(win, y + i, x + YZ_DICE_X, ACS_VLINE);
-		}
-		for (j = 1; j < YZ_DICE_X; ++j)
-		{
-			mvwaddch(win, y, x + j, ACS_HLINE);
-			mvwaddch(win, y + YZ_DICE_Y, j + x, ACS_HLINE);
-		}
-		mvwaddch(win, y, x, ACS_ULCORNER);
-		mvwaddch(win, y + YZ_DICE_Y, x, ACS_LLCORNER);
-		mvwaddch(win, y + YZ_DICE_Y, x + YZ_DICE_X, ACS_LRCORNER);
-		mvwaddch(win, y, x + YZ_DICE_X, ACS_URCORNER);
-	}
-#ifdef SYS5_3_COLOR
-	if (OptUseColor)
-		wattroff(win, COLOR_PAIR(PAIR6));
-#endif
-	DisplayDice(win, dice);
-}
-
-void
-DisplayDie(win, dice, die)
-     WINDOW *win;
-     dice_t dice[YZ_DICE];
-     int die;
-
-{
-	int y, x;
-	int i;
-
-	x = die * (YZ_DICE_X + YZ_DICE_PAD) + 1;
-	y = 1;
-	if (dice[die].hold)
-		DICEATTRON(win, OptNoDim);
-	for (i = 0; i < YZ_DICE_Y; ++i)
-		mvwaddstr(win, y + i, x, DieStr[dice[die].dice][i]);
-	if (dice[die].hold)
-		DICEATTROFF(win, OptNoDim);
-	DieCentre(win, die);
-}
-
-void
-DieCentre(win, die)
-     WINDOW *win;
-     int die;
-
-{
-	wmove(win, YZ_CEN_Y, die * (YZ_DICE_X + YZ_DICE_PAD) + YZ_CEN_X);
-	wrefresh(win);
-}
-
-static void
-SidesAndPlayers(win, players, player_count)
-     WINDOW *win;
-     players_t players[YZ_PLAYERS_MAX];
-     int player_count;
-
+SidesAndPlayers(WINDOW *win, players_t players[YZ_PLAYERS_MAX], int player_count)
 {
 	int i;
 	char *name;
@@ -361,10 +81,14 @@ SidesAndPlayers(win, players, player_count)
 }
 
 void
-DisplayDice(win, dice)
-     WINDOW *win;
-     dice_t dice[YZ_DICE];
+DieCentre(WINDOW *win, int die)
+{
+	wmove(win, YZ_CEN_Y, die * (YZ_DICE_X + YZ_DICE_PAD) + YZ_CEN_X);
+	wrefresh(win);
+}
 
+void
+DisplayDice(WINDOW *win, dice_t dice[YZ_DICE])
 {
 	int i, die;
 	int y, x;
@@ -384,10 +108,7 @@ DisplayDice(win, dice)
 }
 
 static int
-GetPlayers(old_win, players)
-     WINDOW *old_win;
-     players_t players[YZ_PLAYERS_MAX];
-
+GetPlayers(WINDOW *old_win, players_t players[YZ_PLAYERS_MAX])
 {
 	int i;
 	int ch;
@@ -501,15 +222,35 @@ GetPlayers(old_win, players)
 }
 
 static void
-Randomise(seed)
-     unsigned long seed;
-
+Randomise(unsigned long seed)
 {
 	srand48(seed);
 }
 
 static void
-InitSignals()
+Cleanup(int sig_no)
+{
+	endwin();
+	if (OptLearn)
+		DumpCosts();
+	if (sig_no != SIGINT)
+		fprintf(stderr, "Signal %d received.\n", sig_no);
+	exit(1);
+}
+
+static void
+DumpCore(int sig_no)
+{
+	if (sig_no != SIGQUIT)
+		Cleanup(sig_no);
+	(void)signal(SIGQUIT, SIG_DFL);
+	kill(getpid(), SIGQUIT);
+	pause();
+	exit(1);
+}
+
+static void
+InitSignals(void)
 {
 	if (OptLearn)
 	{
@@ -522,28 +263,236 @@ InitSignals()
 	(void)signal(SIGQUIT, DumpCore);
 }
 
-static void
-Cleanup(sig_no)
-     int sig_no;
-
+static WINDOW *
+InitScreen(void)
 {
-	endwin();
-	if (OptLearn)
-		DumpCosts();
-	if (sig_no != SIGINT)
-		fprintf(stderr, "Signal %d received.\n", sig_no);
-	exit(1);
+	initscr();
+	cbreak();
+	noecho();
+#ifndef BSD_CURSES
+	OptNoDim = !tparm(enter_dim_mode);
+#ifdef SYS5_3_COLOR
+	if (OptUseColor)
+	{
+		if (start_color() != OK)
+			OptUseColor = 0;
+		else if (has_colors())
+		{
+			init_pair(PAIR1, COLOR_MAGENTA, COLOR_BLACK);
+			init_pair(PAIR2, COLOR_RED, COLOR_WHITE);
+			init_pair(PAIR3, COLOR_BLUE, COLOR_BLACK);
+			init_pair(PAIR4, COLOR_YELLOW, COLOR_BLACK);
+			init_pair(PAIR5, COLOR_RED, COLOR_BLACK);
+			init_pair(PAIR6, COLOR_GREEN, COLOR_BLACK);
+		}
+		else
+			OptUseColor = 0;
+	}
+#endif
+#endif
+	return newwin(0, 0, 0, 0);
 }
 
 static void
-DumpCore(sig_no)
-     int sig_no;
-
+ProcessArgs(int argc, char *argv[])
 {
-	if (sig_no != SIGQUIT)
-		Cleanup(sig_no);
-	(void)signal(SIGQUIT, SIG_DFL);
-	kill(getpid(), SIGQUIT);
-	pause();
-	exit(1);
+	int opt;
+	char *prog;
+
+	prog = argv[0];
+	while ((opt = getopt(argc, argv, "snldchfC")) != EOF)
+		switch (opt)
+		{
+		case 's':
+			DumpScore();
+			exit(0);
+			break;
+		case 'l':
+			OptLearn = 1;
+			fprintf(stderr, "learning...");
+			break;
+		case 'd':
+			OptNoDim = 1;
+			break;
+		case 'c':
+			OptCheat = 1;
+			break;
+		case 'f':
+			OptFast = 1;
+			break;
+		case 'n':
+			OptNonStop = 1;
+			break;
+		case 'C':
+			OptUseColor = 0;
+			break;
+		case 'h':
+		case '?':
+			fprintf(stderr, "usage: %s -nshfd\n", prog);
+			fprintf(stderr, "\t-n\t = non-stop\n");
+			fprintf(stderr, "\t-s\t = high score file\n");
+			fprintf(stderr, "\t-h\t = display these options\n");
+			fprintf(stderr, "\t-f\t = fast computer play\n");
+			fprintf(stderr, "\t-d\t = don't use dim mode\n");
+			exit(1);
+			break;
+		}
+}
+
+static int
+Continue(WINDOW *old_win)
+{
+	WINDOW *win;
+	int ch;
+	int yes, no;
+
+	if (OptNonStop)
+		return 1;
+	win = GrabWindow(old_win, 3, 24, 2, YZ_DICE * (YZ_DICE_X + YZ_DICE_PAD) - 1, PAIR1);
+	mvwaddstr(win, 1, 1, "Continue (y) or (n): ");
+#ifndef SYS5_3_CURSES
+	wrefresh(win);
+#endif
+	overwrite(win, old_win);
+	do
+	{
+		if (!OptLearn)
+			ch = wgetch(win);
+		else
+			ch = 'y';
+		yes = ch == 'Y' || ch == 'y' || ch == ' ';
+		if (!yes && ch != 'n' && ch != 'N')
+		{
+			no = 0;
+			ExtraCheck(win, ch, HLP_CONTINUE);
+			touchwin(old_win);
+			wrefresh(old_win);
+			touchwin(win);
+			wrefresh(win);
+		}
+		else
+			no = 1;
+	}
+	while (!no && !yes);
+	DropWindow(old_win, win);
+
+	return yes;
+}
+
+static void
+DrawBoard(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player_count)
+{
+	int i, j, die;
+	int y, x;
+
+	werase(win);
+	SidesAndPlayers(win, players, player_count);
+#ifdef SYS5_3_COLOR
+	if (OptUseColor)
+		wattron(win, COLOR_PAIR(PAIR6));
+#endif
+	for (die = 0; die < YZ_DICE; ++die)
+	{
+		y = 0;
+		x = die * (YZ_DICE_X + YZ_DICE_PAD);
+		for (i = 1; i < YZ_DICE_Y; ++i)
+		{
+			mvwaddch(win, y + i, x, ACS_VLINE);
+			mvwaddch(win, y + i, x + YZ_DICE_X, ACS_VLINE);
+		}
+		for (j = 1; j < YZ_DICE_X; ++j)
+		{
+			mvwaddch(win, y, x + j, ACS_HLINE);
+			mvwaddch(win, y + YZ_DICE_Y, j + x, ACS_HLINE);
+		}
+		mvwaddch(win, y, x, ACS_ULCORNER);
+		mvwaddch(win, y + YZ_DICE_Y, x, ACS_LLCORNER);
+		mvwaddch(win, y + YZ_DICE_Y, x + YZ_DICE_X, ACS_LRCORNER);
+		mvwaddch(win, y, x + YZ_DICE_X, ACS_URCORNER);
+	}
+#ifdef SYS5_3_COLOR
+	if (OptUseColor)
+		wattroff(win, COLOR_PAIR(PAIR6));
+#endif
+	DisplayDice(win, dice);
+}
+
+static int
+InitGame(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE])
+{
+	int i, j;
+	int player_count;
+
+	player_count = GetPlayers(win, players);
+	for (i = 0; i < player_count; ++i)
+	{
+		players[i].bonus = 0;
+		players[i].bonus63 = 0;
+		players[i].total63 = 0;
+		players[i].total = 0;
+		for (j = 0; j < YZ_CAT_COUNT; ++j)
+		{
+			players[i].score[j] = 0;
+			players[i].used[j] = 0;
+		}
+	}
+	CLEAR_HOLD(dice);
+	ROLL_DICE(dice);
+	DrawBoard(win, players, dice, player_count);
+
+	return player_count;
+}
+
+int
+main(int argc, char *argv[])
+{
+	int player_count;
+	int winner;
+	players_t players[YZ_PLAYERS_MAX];
+	dice_t dice[YZ_DICE];
+	WINDOW *win;
+
+	ProcessArgs(argc, argv);
+	win = InitScreen();
+	InitSignals();
+	InitCosts();
+	Randomise((unsigned long)time((long *)0));
+	do
+	{
+		player_count = InitGame(win, players, dice);
+		PlayGame(win, players, dice, player_count);
+		winner = DetermineWinner(win, players, player_count);
+		if (OptLearn)
+			AdjustCosts(winner, player_count);
+		else
+			WriteScore(win, players, player_count);
+	}
+	while (Continue(win));
+	DisplayScore(win, 0);
+#ifdef BSD_CURSES
+	wmove(win, LINES - 1, 0);
+	wrefresh(win);
+	nocrmode();
+	echo();
+#endif
+	endwin();
+
+	return 0;
+}
+
+void
+DisplayDie(WINDOW *win, dice_t dice[YZ_DICE], int die)
+{
+	int y, x;
+	int i;
+
+	x = die * (YZ_DICE_X + YZ_DICE_PAD) + 1;
+	y = 1;
+	if (dice[die].hold)
+		DICEATTRON(win, OptNoDim);
+	for (i = 0; i < YZ_DICE_Y; ++i)
+		mvwaddstr(win, y + i, x, DieStr[dice[die].dice][i]);
+	if (dice[die].hold)
+		DICEATTROFF(win, OptNoDim);
+	DieCentre(win, die);
 }

@@ -7,45 +7,10 @@
 #include "yz_macros.h"
 #include "yz_funcs.h"
 
-static int GetHold();
-static void SelectCategory();
-static int HumanHold();
-static void CalcScore();
-static int HumanSelect();
-static void Outline();
-static int SetDice();
-
 extern int OptLearn;
 extern int OptCheat;
 extern int OptFast;
 extern int OptUseColor;
-
-void
-PlayGame(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player_count)
-{
-	int cat;
-	int player;
-	int held;
-
-	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
-		for (player = 0; player < player_count; ++player)
-		{
-			Outline(win, players, player, player_count);
-			held = GetHold(win, players, dice, player);
-			if (held < YZ_DICE && !OptCheat)
-			{
-				ROLL_DICE(dice);
-				held = GetHold(win, players, dice, player);
-				if (held < YZ_DICE)
-					ROLL_DICE(dice);
-			}
-			CLEAR_HOLD(dice);
-			DisplayDice(win, dice);
-			SelectCategory(win, players, dice, player);
-			ROLL_DICE(dice);
-			flushinp();
-		}
-}
 
 static void
 Outline(WINDOW *win, players_t players[YZ_PLAYERS_MAX], int player, int player_count)
@@ -109,59 +74,6 @@ DetermineWinner(WINDOW *win, players_t players[YZ_PLAYERS_MAX], int player_count
 	wrefresh(win);
 
 	return best_player;
-}
-
-static int
-GetHold(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
-{
-	int held;
-
-	DisplayDice(win, dice);
-	if (players[player].computer)
-	{
-		held = ComputerHold(players, dice, player);
-		DisplayDice(win, dice);
-	}
-	else if (!OptCheat)
-		held = HumanHold(win, players, dice, player);
-	else
-		held = SetDice(win, players, dice, player);
-
-	wrefresh(win);
-	if (!OptLearn && players[player].computer && !OptFast)
-		(void)sleep((unsigned int)0);
-
-	return held;
-}
-
-static int
-SetDice(WINDOW *old_win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
-{
-	WINDOW *win;
-	int i, bogus;
-
-	echo();
-	do
-	{
-		win = GrabWindow(old_win, 3, 30, 12, 20, 0);
-		mvwaddstr(win, 1, 1, "Five dice: ");
-		wrefresh(win);
-		wscanw(win, "%d %d %d %d %d", &dice[0].dice, &dice[1].dice, &dice[2].dice, &dice[3].dice, &dice[4].dice);
-		bogus = 0;
-		for (i = 0; i < YZ_DICE; ++i)
-			if (--dice[i].dice < 0 || dice[i].dice >= YZ_DICE_MAX)
-			{
-				bogus = 1;
-				flash();
-			}
-		DropWindow(old_win, win);
-	}
-	while (bogus);
-	noecho();
-	for (i = 0; i < YZ_DICE; ++i)
-		dice[i].hold = 1;
-
-	return YZ_DICE;
 }
 
 static int
@@ -233,17 +145,57 @@ HumanHold(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], 
 	return held;
 }
 
-static void
-SelectCategory(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
+static int
+SetDice(WINDOW *old_win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
 {
-	int cat;
+	WINDOW *win;
+	int i, bogus;
+
+	echo();
+	do
+	{
+		win = GrabWindow(old_win, 3, 30, 12, 20, 0);
+		mvwaddstr(win, 1, 1, "Five dice: ");
+		wrefresh(win);
+		wscanw(win, "%d %d %d %d %d", &dice[0].dice, &dice[1].dice, &dice[2].dice, &dice[3].dice, &dice[4].dice);
+		bogus = 0;
+		for (i = 0; i < YZ_DICE; ++i)
+			if (--dice[i].dice < 0 || dice[i].dice >= YZ_DICE_MAX)
+			{
+				bogus = 1;
+				flash();
+			}
+		DropWindow(old_win, win);
+	}
+	while (bogus);
+	noecho();
+	for (i = 0; i < YZ_DICE; ++i)
+		dice[i].hold = 1;
+
+	return YZ_DICE;
+}
+
+static int
+GetHold(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
+{
+	int held;
 
 	DisplayDice(win, dice);
-	if (players[player].computer || (!players[player].computer && OptCheat))
-		cat = ComputerSelect(win, players, dice, player);
+	if (players[player].computer)
+	{
+		held = ComputerHold(players, dice, player);
+		DisplayDice(win, dice);
+	}
+	else if (!OptCheat)
+		held = HumanHold(win, players, dice, player);
 	else
-		cat = HumanSelect(win, players, dice, player);
-	CalcScore(win, cat, players, dice, player);
+		held = SetDice(win, players, dice, player);
+
+	wrefresh(win);
+	if (!OptLearn && players[player].computer && !OptFast)
+		(void)sleep((unsigned int)0);
+
+	return held;
 }
 
 static int
@@ -339,4 +291,44 @@ CalcScore(WINDOW *win, int cat, players_t players[YZ_PLAYERS_MAX], dice_t dice[Y
 	}
 	else
 		wrefresh(win);
+}
+
+static void
+SelectCategory(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
+{
+	int cat;
+
+	DisplayDice(win, dice);
+	if (players[player].computer || (!players[player].computer && OptCheat))
+		cat = ComputerSelect(win, players, dice, player);
+	else
+		cat = HumanSelect(win, players, dice, player);
+	CalcScore(win, cat, players, dice, player);
+}
+
+void
+PlayGame(WINDOW *win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player_count)
+{
+	int cat;
+	int player;
+	int held;
+
+	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
+		for (player = 0; player < player_count; ++player)
+		{
+			Outline(win, players, player, player_count);
+			held = GetHold(win, players, dice, player);
+			if (held < YZ_DICE && !OptCheat)
+			{
+				ROLL_DICE(dice);
+				held = GetHold(win, players, dice, player);
+				if (held < YZ_DICE)
+					ROLL_DICE(dice);
+			}
+			CLEAR_HOLD(dice);
+			DisplayDice(win, dice);
+			SelectCategory(win, players, dice, player);
+			ROLL_DICE(dice);
+			flushinp();
+		}
 }

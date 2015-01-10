@@ -12,202 +12,8 @@ extern int OptCheat;
 static float PCostList[YZ_PLAYERS_MAX][YZ_CAT_COUNT][SC_YAHTZEE + 1];
 static int LastWinner = -1;
 
-static void HoldOne2Six();
-static void HoldOaK();
-static void HoldFullHouse();
-static void HoldStraight();
-static void HoldYahtzee();
-static void HoldChance();
-
-void
-InitCosts()
-{
-	int i, j, p;
-
-	for (i = 0; i < YZ_CAT_COUNT; ++i)
-		for (j = 0; j < SC_YAHTZEE + 1; ++j)
-			for (p = 0; p < YZ_PLAYERS_MAX; ++p)
-				PCostList[p][i][j] = CostList[i][j];
-}
-
-void
-AdjustCosts(winner, player_count)
-     int winner;
-     int player_count;
-
-{
-	int player, i, j;
-	float var;
-	extern double drand48();
-	extern long lrand48();
-	extern double sqrt();
-
-	for (player = 0; player < player_count; ++player)
-		if (player != winner)
-			for (i = 0; i < YZ_CAT_COUNT; ++i)
-				for (j = 0; j < SC_YAHTZEE + 1; ++j)
-				{
-					var = sqrt(Que * (j + 0.1) * drand48());
-					if (lrand48() & 1)
-						var = -var;
-					PCostList[player][i][j] = PCostList[winner][i][j] + var;
-				}
-	LastWinner = winner;
-	Que = Que * 0.9999;
-	DumpCosts();
-}
-
-void
-DumpCosts()
-{
-	int i, j;
-	int wrap_5;
-	FILE *fp;
-
-	if (LastWinner == -1)
-		return;
-	(void)unlink("oldtmp.h");
-	(void)link("tmp.h", "oldtmp.h");
-	(void)unlink("tmp.h");
-	if ((fp = fopen("tmp.h", "w")) == NULL)
-	{
-		fprintf(stderr, "Cannot open cost file\n");
-		return;
-	}
-	fprintf(fp, "static float Que = %f;\n\n", Que);
-	fprintf(fp, "static float CostList[YZ_CAT_COUNT][SC_YAHTZEE + 1] = {{\n\t");
-	wrap_5 = 0;
-	for (i = 0; i < YZ_CAT_COUNT; ++i)
-	{
-		for (j = 0; j < SC_YAHTZEE + 1; ++j)
-		{
-			fprintf(fp, "%f", PCostList[LastWinner][i][j]);
-			if (wrap_5 < 4)
-			{
-				if (j != SC_YAHTZEE)
-				{
-					fprintf(fp, ", ");
-					++wrap_5;
-				}
-			}
-			else
-			{
-				wrap_5 = 0;
-				fprintf(fp, ",\n\t");
-			}
-		}
-		if (i != YZ_CAT_COUNT - 1)
-			fprintf(fp, "},\n /* %.3d */ {", i);
-	}
-	fprintf(fp, "}};\n");
-	fclose(fp);
-}
-
-int
-ComputerHold(players, dice, player)
-     players_t players[YZ_PLAYERS_MAX];
-     dice_t dice[YZ_DICE];
-     int player;
-
-{
-	int cat;
-	int i;
-	int score, bonus, bonus63;
-	float huer, best_huer = -1000.00;
-	dice_t new_dice[YZ_DICE];
-	int held = 0;
-
-	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
-		if (!players[player].used[cat])
-		{
-			for (i = 0; i < YZ_DICE; ++i)
-				new_dice[i] = dice[i];
-			FindHold(cat, new_dice);
-			huer = 0.0;
-			for (i = 0; i < HUER_SAMPLE_SIZE; ++i)
-			{
-				ROLL_DICE(new_dice);
-				Eval(cat, new_dice, &score, &bonus, &bonus63, players, player);
-				huer += score + PCostList[player][cat][score] + bonus + bonus63;
-			}
-			if (huer > best_huer)
-			{
-				best_huer = huer;
-				held = 0;
-				for (i = 0; i < YZ_DICE; ++i)
-					if ((dice[i].hold = new_dice[i].hold) != 0)
-						++held;
-			}
-		}
-
-	return held;
-}
-
-int
-ComputerSelect(old_win, players, dice, player)
-     WINDOW *old_win;
-     players_t players[YZ_PLAYERS_MAX];
-     dice_t dice[YZ_DICE];
-     int player;
-
-{
-	WINDOW *win = 0;
-	int cheat, col;
-	int cat, best_cat = 0;
-	int score, bonus, bonus63;
-	float huer, best_huer = -1000.0;
-
-	cheat = OptCheat && !players[player].computer;
-	if (cheat)
-	{
-		col = YZ_PLAYER_COLS * player + YZ_PLAYER_PAD;
-		win = GrabWindow(old_win, YZ_CAT_COUNT + 2, 15, YZ_TOP - 2, col, 0);
-	}
-	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
-		if (!players[player].used[cat])
-		{
-			Eval(cat, dice, &score, &bonus, &bonus63, players, player);
-			huer = score + PCostList[player][cat][score] + bonus + bonus63;
-			if (cheat)
-			{
-				wmove(win, cat + 1, 1);
-				wprintw(win, "%f", huer);
-			}
-			if (huer > best_huer)
-			{
-				best_huer = huer;
-				best_cat = cat;
-			}
-		}
-	if (cheat)
-	{
-		while (wgetch(win) != ' ');
-		DropWindow(old_win, win);
-	}
-
-	return best_cat;
-}
-
-void
-FindHold(cat, dice)
-     int cat;
-     dice_t dice[YZ_DICE];
-
-{
-	static void (*hold_funs[]) () =
-	{
-	HoldOne2Six, HoldOne2Six,
-			HoldOne2Six, HoldOne2Six, HoldOne2Six, HoldOne2Six, HoldOaK, HoldOaK, HoldFullHouse, HoldStraight, HoldStraight, HoldYahtzee, HoldChance};
-
-	CLEAR_HOLD(dice);
-	(*hold_funs[cat]) (cat, dice);
-}
-
 static void
-HoldOne2Six(cat, dice)
-     int cat;
-     dice_t dice[YZ_DICE];
-
+HoldOne2Six(int cat, dice_t dice[YZ_DICE])
 {
 	int i;
 
@@ -217,10 +23,7 @@ HoldOne2Six(cat, dice)
 }
 
 static void
-HoldOaK(cat, dice)
-     int cat;
-     dice_t dice[YZ_DICE];
-
+HoldOaK(int cat, dice_t dice[YZ_DICE])
 {
 	int i;
 	int reps[YZ_DICE_MAX];
@@ -243,10 +46,7 @@ HoldOaK(cat, dice)
 }
 
 static void
-HoldFullHouse(cat, dice)
-     int cat;
-     dice_t dice[YZ_DICE];
-
+HoldFullHouse(int cat, dice_t dice[YZ_DICE])
 {
 	int i;
 	int reps[YZ_DICE_MAX];
@@ -260,10 +60,7 @@ HoldFullHouse(cat, dice)
 }
 
 static void
-HoldStraight(cat, dice)
-     int cat;
-     dice_t dice[YZ_DICE];
-
+HoldStraight(int cat, dice_t dice[YZ_DICE])
 {
 	int i, j;
 	int tmp;
@@ -316,23 +113,186 @@ HoldStraight(cat, dice)
 }
 
 static void
-HoldYahtzee(cat, dice)
-     int cat;
-     dice_t dice[YZ_DICE];
-
+HoldYahtzee(int cat, dice_t dice[YZ_DICE])
 {
 	HoldOaK(cat, dice);
 }
 
 static void
-HoldChance(cat, dice)
-     int cat;
-     dice_t dice[YZ_DICE];
-
+HoldChance(int cat, dice_t dice[YZ_DICE])
 {
 	int i;
 
 	for (i = 0; i < YZ_DICE; ++i)
 		if (dice[i].dice > YZ_DICE_MAX / 2)
 			dice[i].hold = 1;
+}
+
+void
+InitCosts(void)
+{
+	int i, j, p;
+
+	for (i = 0; i < YZ_CAT_COUNT; ++i)
+		for (j = 0; j < SC_YAHTZEE + 1; ++j)
+			for (p = 0; p < YZ_PLAYERS_MAX; ++p)
+				PCostList[p][i][j] = CostList[i][j];
+}
+
+void
+AdjustCosts(int winner, int player_count)
+{
+	int player, i, j;
+	float var;
+	extern double drand48();
+	extern long lrand48();
+	extern double sqrt();
+
+	for (player = 0; player < player_count; ++player)
+		if (player != winner)
+			for (i = 0; i < YZ_CAT_COUNT; ++i)
+				for (j = 0; j < SC_YAHTZEE + 1; ++j)
+				{
+					var = sqrt(Que * (j + 0.1) * drand48());
+					if (lrand48() & 1)
+						var = -var;
+					PCostList[player][i][j] = PCostList[winner][i][j] + var;
+				}
+	LastWinner = winner;
+	Que = Que * 0.9999;
+	DumpCosts();
+}
+
+void
+DumpCosts(void)
+{
+	int i, j;
+	int wrap_5;
+	FILE *fp;
+
+	if (LastWinner == -1)
+		return;
+	(void)unlink("oldtmp.h");
+	(void)link("tmp.h", "oldtmp.h");
+	(void)unlink("tmp.h");
+	if ((fp = fopen("tmp.h", "w")) == NULL)
+	{
+		fprintf(stderr, "Cannot open cost file\n");
+		return;
+	}
+	fprintf(fp, "static float Que = %f;\n\n", Que);
+	fprintf(fp, "static float CostList[YZ_CAT_COUNT][SC_YAHTZEE + 1] = {{\n\t");
+	wrap_5 = 0;
+	for (i = 0; i < YZ_CAT_COUNT; ++i)
+	{
+		for (j = 0; j < SC_YAHTZEE + 1; ++j)
+		{
+			fprintf(fp, "%f", PCostList[LastWinner][i][j]);
+			if (wrap_5 < 4)
+			{
+				if (j != SC_YAHTZEE)
+				{
+					fprintf(fp, ", ");
+					++wrap_5;
+				}
+			}
+			else
+			{
+				wrap_5 = 0;
+				fprintf(fp, ",\n\t");
+			}
+		}
+		if (i != YZ_CAT_COUNT - 1)
+			fprintf(fp, "},\n /* %.3d */ {", i);
+	}
+	fprintf(fp, "}};\n");
+	fclose(fp);
+}
+
+static void
+FindHold(int cat, dice_t dice[YZ_DICE])
+{
+	static void (*hold_funs[]) () =
+	{
+	HoldOne2Six, HoldOne2Six,
+			HoldOne2Six, HoldOne2Six, HoldOne2Six, HoldOne2Six, HoldOaK, HoldOaK, HoldFullHouse, HoldStraight, HoldStraight, HoldYahtzee, HoldChance};
+
+	CLEAR_HOLD(dice);
+	(*hold_funs[cat]) (cat, dice);
+}
+
+int
+ComputerHold(players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
+{
+	int cat;
+	int i;
+	int score, bonus, bonus63;
+	float huer, best_huer = -1000.00;
+	dice_t new_dice[YZ_DICE];
+	int held = 0;
+
+	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
+		if (!players[player].used[cat])
+		{
+			for (i = 0; i < YZ_DICE; ++i)
+				new_dice[i] = dice[i];
+			FindHold(cat, new_dice);
+			huer = 0.0;
+			for (i = 0; i < HUER_SAMPLE_SIZE; ++i)
+			{
+				ROLL_DICE(new_dice);
+				Eval(cat, new_dice, &score, &bonus, &bonus63, players, player);
+				huer += score + PCostList[player][cat][score] + bonus + bonus63;
+			}
+			if (huer > best_huer)
+			{
+				best_huer = huer;
+				held = 0;
+				for (i = 0; i < YZ_DICE; ++i)
+					if ((dice[i].hold = new_dice[i].hold) != 0)
+						++held;
+			}
+		}
+
+	return held;
+}
+
+int
+ComputerSelect(WINDOW *old_win, players_t players[YZ_PLAYERS_MAX], dice_t dice[YZ_DICE], int player)
+{
+	WINDOW *win = 0;
+	int cheat, col;
+	int cat, best_cat = 0;
+	int score, bonus, bonus63;
+	float huer, best_huer = -1000.0;
+
+	cheat = OptCheat && !players[player].computer;
+	if (cheat)
+	{
+		col = YZ_PLAYER_COLS * player + YZ_PLAYER_PAD;
+		win = GrabWindow(old_win, YZ_CAT_COUNT + 2, 15, YZ_TOP - 2, col, 0);
+	}
+	for (cat = 0; cat < YZ_CAT_COUNT; ++cat)
+		if (!players[player].used[cat])
+		{
+			Eval(cat, dice, &score, &bonus, &bonus63, players, player);
+			huer = score + PCostList[player][cat][score] + bonus + bonus63;
+			if (cheat)
+			{
+				wmove(win, cat + 1, 1);
+				wprintw(win, "%f", huer);
+			}
+			if (huer > best_huer)
+			{
+				best_huer = huer;
+				best_cat = cat;
+			}
+		}
+	if (cheat)
+	{
+		while (wgetch(win) != ' ');
+		DropWindow(old_win, win);
+	}
+
+	return best_cat;
 }

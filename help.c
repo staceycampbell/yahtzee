@@ -74,10 +74,7 @@ static char Help[HLP_LAST_VALID + 1][YZ_HLP_LINES][YZ_HLP_COLS] = {
 };
 
 void
-HelpOut(old_win, hlp_no)
-     WINDOW *old_win;
-     int hlp_no;
-
+HelpOut(WINDOW *old_win, int hlp_no)
 {
 	WINDOW *win;
 	int ch;
