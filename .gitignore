@@ -1,0 +1,13 @@
+.deps
+Makefile
+admin.o
+book.o
+comp.o
+config.log
+config.status
+eval.o
+help.o
+main.o
+score.o
+scr.o
+yahtzee
